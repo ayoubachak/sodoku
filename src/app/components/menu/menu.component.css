@@ -1,0 +1,62 @@
+.menu-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  max-width: 500px;
+}
+
+.menu-card {
+  width: 100%;
+  padding: 2rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+}
+
+mat-card-header {
+  margin-bottom: 1.5rem;
+  justify-content: center;
+  text-align: center;
+}
+
+mat-card-title {
+  font-size: 1.8rem;
+  margin-bottom: 0.5rem;
+}
+
+mat-card-subtitle {
+  font-size: 1rem;
+}
+
+.difficulty-selector {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 2rem;
+}
+
+.difficulty-selector label {
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+mat-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem 0;
+}
+
+button {
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  mat-card-actions {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+  
+  button {
+    width: auto;
+  }
+}

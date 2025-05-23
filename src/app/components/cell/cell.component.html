@@ -1,0 +1,9 @@
+<div 
+  class="cell" 
+  [class.original]="isOriginal" 
+  [class.selected]="isSelected"
+  [class.same-number]="isSameNumber"
+  (click)="onClick()"
+>
+  {{ value !== 0 ? value : '' }}
+</div>

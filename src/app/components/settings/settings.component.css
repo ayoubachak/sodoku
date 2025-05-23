@@ -1,0 +1,63 @@
+.settings-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  max-width: 500px;
+}
+
+.settings-card {
+  width: 100%;
+  padding: 1rem;
+}
+
+.settings-group {
+  margin-bottom: 2rem;
+}
+
+.settings-group h3 {
+  margin-bottom: 1rem;
+  font-size: 1.2rem;
+  color: #555;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 0.5rem;
+}
+
+.setting-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding: 0.5rem 0;
+}
+
+.setting-item span {
+  font-size: 1rem;
+}
+
+mat-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 1rem 0;
+}
+
+@media (max-width: 768px) {
+  .settings-card {
+    padding: 0.5rem;
+  }
+  
+  .setting-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  mat-card-actions {
+    flex-direction: column;
+  }
+  
+  button {
+    width: 100%;
+  }
+}

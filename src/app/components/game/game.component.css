@@ -1,0 +1,147 @@
+.game-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 500px;
+}
+
+.game-header {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.game-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1rem;
+  background-color: #f5f5f5;
+  padding: 0.75rem;
+  border-radius: 8px;
+}
+
+.game-info span {
+  font-weight: bold;
+}
+
+.game-actions {
+  display: flex;
+  justify-content: space-between;
+}
+
+.loading-indicator {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 400px;
+  width: 100%;
+}
+
+.sudoku-board {
+  width: 100%;
+  aspect-ratio: 1/1;
+  margin-bottom: 1.5rem;
+}
+
+.board-grid {
+  display: grid;
+  grid-template-rows: repeat(9, 1fr);
+  width: 100%;
+  height: 100%;
+  border: 2px solid #333;
+}
+
+.board-row {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+}
+
+.board-cell {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.5rem;
+  font-weight: 500;
+  border: 1px solid #ccc;
+  cursor: pointer;
+  user-select: none;
+  aspect-ratio: 1/1;
+}
+
+/* Add thicker borders for 3x3 boxes */
+.board-row:nth-child(3n) .board-cell {
+  border-bottom: 2px solid #333;
+}
+
+.board-cell:nth-child(3n) {
+  border-right: 2px solid #333;
+}
+
+.board-cell.selected {
+  background-color: #e3f2fd;
+}
+
+.board-cell.original {
+  font-weight: bold;
+  color: #333;
+  background-color: #f5f5f5;
+}
+
+.board-cell.same-number {
+  background-color: #e8f5e9;
+}
+
+.number-pad {
+  width: 100%;
+  margin-top: 1rem;
+}
+
+.number-buttons {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.5rem;
+}
+
+.number-buttons button {
+  font-size: 1.25rem;
+  min-width: 0;
+  padding: 0.5rem;
+}
+
+.game-completed {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.9);
+  z-index: 10;
+  text-align: center;
+}
+
+.game-completed h2 {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  color: #4caf50;
+}
+
+.game-completed button {
+  margin-top: 1rem;
+}
+
+@media (max-width: 768px) {
+  .board-cell {
+    font-size: 1.2rem;
+  }
+  
+  .number-buttons {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}

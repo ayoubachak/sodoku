@@ -1,0 +1,25 @@
+<div class="menu-container">
+  <mat-card class="menu-card">
+    <mat-card-header>
+      <mat-card-title>Sudoku Game</mat-card-title>
+      <mat-card-subtitle>Select difficulty and start playing</mat-card-subtitle>
+    </mat-card-header>
+    
+    <mat-card-content>
+      <div class="difficulty-selector">
+        <label for="difficulty">Difficulty:</label>
+        <mat-select id="difficulty" [(ngModel)]="selectedDifficulty">
+          <mat-option *ngFor="let difficulty of difficulties" [value]="difficulty">
+            {{ difficulty | titlecase }}
+          </mat-option>
+        </mat-select>
+      </div>
+    </mat-card-content>
+    
+    <mat-card-actions>
+      <button mat-raised-button color="primary" (click)="startGame()">Start Game</button>
+      <button mat-raised-button color="accent" (click)="goToSettings()">Settings</button>
+      <button mat-raised-button color="warn" disabled>Watch AI Play</button>
+    </mat-card-actions>
+  </mat-card>
+</div>

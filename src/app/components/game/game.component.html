@@ -1,0 +1,57 @@
+<div class="game-container">
+  <div class="game-header">
+    <div class="game-info">
+      <div class="difficulty">Difficulty: <span>{{ difficulty | titlecase }}</span></div>
+      <div class="timer">Time: <span>{{ formatTime() }}</span></div>
+      <div class="mistakes">Mistakes: <span>{{ mistakes }}/3</span></div>
+    </div>
+    
+    <div class="game-actions">
+      <button mat-raised-button color="primary" (click)="newGame()">New Game</button>
+      <button mat-raised-button color="accent" (click)="backToMenu()">Menu</button>
+    </div>
+  </div>
+  
+  <div class="loading-indicator" *ngIf="loading">
+    <p>Loading Sudoku board...</p>
+  </div>
+  
+  <div class="sudoku-board" *ngIf="!loading">
+    <div class="board-grid">
+      <div class="board-row" *ngFor="let row of board; let i = index">
+        <app-cell
+          *ngFor="let cell of row; let j = index"
+          [value]="cell"
+          [isOriginal]="isOriginal(i, j)"
+          [isSelected]="isSelected(i, j)"
+          [isSameNumber]="cell !== 0 && board[selectedCell?.row || 0][selectedCell?.col || 0] === cell"
+          (cellClick)="selectCell(i, j)"
+        ></app-cell>
+      </div>
+    </div>
+  </div>
+  
+  <div class="number-pad" *ngIf="!loading">
+    <div class="number-buttons">
+      <button 
+        *ngFor="let num of [1,2,3,4,5,6,7,8,9]" 
+        mat-raised-button 
+        color="primary"
+        (click)="enterNumber(num)"
+      >
+        {{ num }}
+      </button>
+      <button mat-raised-button color="warn" (click)="clearCell()">
+        <mat-icon>backspace</mat-icon>
+      </button>
+    </div>
+  </div>
+  
+  <div class="game-completed" *ngIf="gameCompleted">
+    <h2>Puzzle Solved!</h2>
+    <p>Time: {{ formatTime() }}</p>
+    <p>Difficulty: {{ difficulty | titlecase }}</p>
+    <button mat-raised-button color="primary" (click)="newGame()">Play Again</button>
+    <button mat-raised-button color="accent" (click)="backToMenu()">Back to Menu</button>
+  </div>
+</div>
