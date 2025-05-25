@@ -191,6 +191,9 @@ export class AiLearningComponent implements OnInit, OnDestroy {
     // Initialize board
     this.initializeBoard();
     
+    // Update network architecture first
+    this.updateNetworkArchitecture();
+    
     // Initialize PPO agent when PPO is selected
     if (this.selectedAlgorithm === 'ppo') {
       await this.initializePPOAgent();
