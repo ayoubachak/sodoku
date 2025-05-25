@@ -324,15 +324,15 @@
             </ngx-charts-line-chart>
           </div>
 
-          <!-- Neural Network Visualization (Placeholder) -->
-          <div class="network-visualization">
+          <!-- Neural Network Visualization - Only show when model uses neural network -->
+          <div class="network-visualization" *ngIf="hasNeuralNetwork && showNetworkVisualization">
             <h4>Network Architecture</h4>
             <div class="network-viz">
-              <div class="network-layer" *ngFor="let layer of [1, 2, 3, 4]; let i = index">
-                <div class="layer-label">{{i === 0 ? 'Input' : i === 3 ? 'Output' : 'Hidden ' + i}}</div>
+              <div class="network-layer" *ngFor="let layer of networkArchitecture; let i = index">
+                <div class="layer-label">{{layer.name}}</div>
                 <div class="layer-nodes">
-                  <div class="node small" *ngFor="let node of i === 0 ? [1, 2, 3, 4, 5] : (i === 3 ? [1, 2, 3] : [1, 2, 3, 4])"></div>
-                  <div class="node-count">{{i === 0 ? '81' : (i === 3 ? '9' : '64')}}</div>
+                  <div class="node" [ngClass]="{'small': layer.units > 10, 'medium': layer.units <= 10}" *ngFor="let unit of getVisibleNodes(layer.units)"></div>
+                  <div class="node-count" *ngIf="layer.units > 5">{{layer.units}}</div>
                 </div>
               </div>
             </div>

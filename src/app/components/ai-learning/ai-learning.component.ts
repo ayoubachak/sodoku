@@ -140,6 +140,11 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
   private trainingInterval: any = null;
   private currentTrainingBoard: number[][] = [];
 
+  // Neural network visualization properties
+  hasNeuralNetwork: boolean = false;
+  showNetworkVisualization: boolean = false;
+  networkArchitecture: {name: string, units: number}[] = [];
+
   constructor(
     private router: Router,
     private sudokuService: SudokuService,
@@ -1118,6 +1123,52 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
     
     // Update network visualization
     this.generateNetworkVisualization();
+
+    // Update neural network visualization state based on selected algorithm
+    if (this.selectedAlgorithm === 'ppo') {
+      this.hasNeuralNetwork = true;
+      this.showNetworkVisualization = true;
+      this.updateNetworkArchitecture();
+    } else if (this.selectedAlgorithm === 'dqn') {
+      this.hasNeuralNetwork = true;
+      this.showNetworkVisualization = true;
+      this.updateNetworkArchitecture();
+    } else {
+      this.hasNeuralNetwork = false;
+      this.showNetworkVisualization = false;
+    }
+  }
+
+  // Method to update the network architecture visualization based on the selected algorithm
+  updateNetworkArchitecture() {
+    if (this.selectedAlgorithm === 'ppo') {
+      this.networkArchitecture = [
+        { name: 'Input', units: 81 },  // Sudoku board state
+        { name: 'Hidden 1', units: 128 },
+        { name: 'Hidden 2', units: 64 },
+        { name: 'Policy', units: 9 }   // Digit probabilities
+      ];
+    } else if (this.selectedAlgorithm === 'dqn') {
+      this.networkArchitecture = [
+        { name: 'Input', units: 81 },  // Sudoku board state
+        { name: 'Hidden', units: 64 },
+        { name: 'Value', units: 1 },   // State value
+        { name: 'Advantage', units: 9 } // Action advantages
+      ];
+    } else {
+      this.networkArchitecture = [];
+    }
+  }
+
+  // Helper method to limit the number of nodes displayed in the visualization
+  getVisibleNodes(totalUnits: number): number[] {
+    // For large layers, just show a small representative sample
+    const maxVisible = 5;
+    if (totalUnits <= maxVisible) {
+      return Array(totalUnits).fill(0).map((_, i) => i);
+    } else {
+      return Array(maxVisible).fill(0).map((_, i) => i);
+    }
   }
 
   // Update PPO configuration when settings change
