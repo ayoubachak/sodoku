@@ -8,56 +8,163 @@
 
 .settings-card {
   width: 100%;
-  padding: 1rem;
+  padding: 2rem;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+mat-card-header {
+  margin-bottom: 2rem;
+  justify-content: center;
+  text-align: center;
+}
+
+mat-card-title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+mat-card-subtitle {
+  font-size: 1rem;
+  color: #6b7280;
+  font-weight: 400;
 }
 
 .settings-group {
   margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: #f9fafb;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
 }
 
 .settings-group h3 {
-  margin-bottom: 1rem;
-  font-size: 1.2rem;
-  color: #555;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 0.5rem;
+  margin: 0 0 1.5rem 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #374151;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid #e5e7eb;
 }
 
 .setting-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
-  padding: 0.5rem 0;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.setting-item:last-child {
+  margin-bottom: 0;
+}
+
+.setting-item:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
 }
 
 .setting-item span {
   font-size: 1rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+mat-slide-toggle {
+  margin-left: 1rem;
+}
+
+mat-select {
+  min-width: 120px;
+  background: #f3f4f6;
+  border-radius: 6px;
 }
 
 mat-card-actions {
   display: flex;
   justify-content: flex-end;
   gap: 1rem;
-  padding: 1rem 0;
+  padding: 2rem 0 0 0;
+  border-top: 1px solid #e5e7eb;
+  margin-top: 2rem;
+}
+
+button {
+  padding: 0.75rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  min-width: 100px;
+}
+
+button[color="primary"] {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  transform: translateY(0);
+}
+
+button[color="primary"]:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+button:not([color]) {
+  background: #f3f4f6;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+}
+
+button:not([color]):hover {
+  background: #e5e7eb;
+  transform: translateY(-1px);
 }
 
 @media (max-width: 768px) {
   .settings-card {
-    padding: 0.5rem;
+    padding: 1.5rem;
+  }
+  
+  .settings-group {
+    padding: 1rem;
   }
   
   .setting-item {
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.5rem;
+    gap: 1rem;
+    text-align: left;
+  }
+  
+  mat-slide-toggle, mat-select {
+    margin-left: 0;
+    align-self: flex-end;
   }
   
   mat-card-actions {
     flex-direction: column;
+    gap: 0.75rem;
   }
   
   button {
     width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  mat-card-title {
+    font-size: 1.75rem;
   }
 }

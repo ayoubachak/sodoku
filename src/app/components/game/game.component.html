@@ -1,57 +1,151 @@
 <div class="game-container">
+  <!-- Header with game info -->
   <div class="game-header">
-    <div class="game-info">
-      <div class="difficulty">Difficulty: <span>{{ difficulty | titlecase }}</span></div>
-      <div class="timer">Time: <span>{{ formatTime() }}</span></div>
-      <div class="mistakes">Mistakes: <span>{{ mistakes }}/3</span></div>
+    <div class="header-top">
+      <button mat-icon-button (click)="backToMenu()" class="back-button">
+        <mat-icon>arrow_back</mat-icon>
+      </button>
+      <h2 class="game-title">{{ difficulty | titlecase }}</h2>
+      <button mat-icon-button (click)="newGame()" class="new-game-button">
+        <mat-icon>refresh</mat-icon>
+      </button>
     </div>
     
-    <div class="game-actions">
-      <button mat-raised-button color="primary" (click)="newGame()">New Game</button>
-      <button mat-raised-button color="accent" (click)="backToMenu()">Menu</button>
-    </div>
-  </div>
-  
-  <div class="loading-indicator" *ngIf="loading">
-    <p>Loading Sudoku board...</p>
-  </div>
-  
-  <div class="sudoku-board" *ngIf="!loading">
-    <div class="board-grid">
-      <div class="board-row" *ngFor="let row of board; let i = index">
-        <app-cell
-          *ngFor="let cell of row; let j = index"
-          [value]="cell"
-          [isOriginal]="isOriginal(i, j)"
-          [isSelected]="isSelected(i, j)"
-          [isSameNumber]="cell !== 0 && board[selectedCell?.row || 0][selectedCell?.col || 0] === cell"
-          (cellClick)="selectCell(i, j)"
-        ></app-cell>
+    <div class="game-stats">
+      <div class="stat-item">
+        <mat-icon>timer</mat-icon>
+        <span>{{ formatTime() }}</span>
+      </div>
+      <div class="stat-item">
+        <mat-icon>error_outline</mat-icon>
+        <span>{{ mistakes }}/3</span>
+      </div>
+      <div class="stat-item">
+        <mat-icon>lightbulb_outline</mat-icon>
+        <span>{{ maxHints - hintsUsed }}</span>
       </div>
     </div>
   </div>
-  
-  <div class="number-pad" *ngIf="!loading">
-    <div class="number-buttons">
+
+  <!-- Loading indicator -->
+  <div class="loading-container" *ngIf="loading">
+    <div class="loading-spinner"></div>
+    <p>Loading puzzle...</p>
+  </div>
+
+  <!-- Game board -->
+  <div class="board-container" *ngIf="!loading">
+    <div class="sudoku-board">
+      <div class="board-grid">
+        <div class="board-row" *ngFor="let row of board; let i = index">
+          <app-cell
+            *ngFor="let cell of row; let j = index"
+            [value]="cell"
+            [notes]="notes[i][j]"
+            [isOriginal]="isOriginal(i, j)"
+            [isSelected]="isSelected(i, j)"
+            [isSameNumber]="isSameNumber(i, j)"
+            [isHighlighted]="isHighlighted(i, j)"
+            (cellClick)="selectCell(i, j)"
+          ></app-cell>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Control panel -->
+  <div class="controls-panel" *ngIf="!loading">
+    <!-- Number pad -->
+    <div class="number-pad">
       <button 
         *ngFor="let num of [1,2,3,4,5,6,7,8,9]" 
         mat-raised-button 
-        color="primary"
+        class="number-button"
+        [class.notes-mode]="notesMode"
         (click)="enterNumber(num)"
       >
         {{ num }}
       </button>
-      <button mat-raised-button color="warn" (click)="clearCell()">
+    </div>
+
+    <!-- Action buttons -->
+    <div class="action-buttons">
+      <button 
+        mat-raised-button 
+        color="primary" 
+        class="action-btn notes-btn"
+        [class.active]="notesMode"
+        (click)="toggleNotesMode()"
+        matTooltip="Toggle notes mode"
+      >
+        <mat-icon>edit</mat-icon>
+        Notes
+      </button>
+      
+      <button 
+        mat-raised-button 
+        class="action-btn auto-notes-btn"
+        (click)="autoFillAllNotes()"
+        matTooltip="Auto-fill possible numbers for all empty cells"
+      >
+        <mat-icon>auto_fix_high</mat-icon>
+        Auto Notes
+      </button>
+      
+      <button 
+        mat-raised-button 
+        class="action-btn hint-btn"
+        [disabled]="hintsUsed >= maxHints || !selectedCell"
+        (click)="getHint()"
+        matTooltip="Get a hint for selected cell"
+      >
+        <mat-icon>lightbulb</mat-icon>
+        Hint
+      </button>
+      
+      <button 
+        mat-raised-button 
+        color="warn" 
+        class="action-btn clear-btn"
+        [disabled]="!selectedCell || isOriginal(selectedCell.row || 0, selectedCell.col || 0)"
+        (click)="clearCell()"
+        matTooltip="Clear selected cell"
+      >
         <mat-icon>backspace</mat-icon>
+        Clear
       </button>
     </div>
   </div>
-  
-  <div class="game-completed" *ngIf="gameCompleted">
-    <h2>Puzzle Solved!</h2>
-    <p>Time: {{ formatTime() }}</p>
-    <p>Difficulty: {{ difficulty | titlecase }}</p>
-    <button mat-raised-button color="primary" (click)="newGame()">Play Again</button>
-    <button mat-raised-button color="accent" (click)="backToMenu()">Back to Menu</button>
+
+  <!-- Game completion modal -->
+  <div class="completion-overlay" *ngIf="gameCompleted">
+    <div class="completion-modal">
+      <div class="completion-content">
+        <mat-icon class="success-icon">check_circle</mat-icon>
+        <h2>Puzzle Solved!</h2>
+        <div class="completion-stats">
+          <div class="stat">
+            <span class="label">Time:</span>
+            <span class="value">{{ formatTime() }}</span>
+          </div>
+          <div class="stat">
+            <span class="label">Difficulty:</span>
+            <span class="value">{{ difficulty | titlecase }}</span>
+          </div>
+          <div class="stat">
+            <span class="label">Mistakes:</span>
+            <span class="value">{{ mistakes }}</span>
+          </div>
+        </div>
+        <div class="completion-actions">
+          <button mat-raised-button color="primary" (click)="newGame()">
+            Play Again
+          </button>
+          <button mat-stroked-button (click)="backToMenu()">
+            Main Menu
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>

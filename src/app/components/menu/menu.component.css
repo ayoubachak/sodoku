@@ -9,54 +9,125 @@
 .menu-card {
   width: 100%;
   padding: 2rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 mat-card-header {
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
   justify-content: center;
   text-align: center;
 }
 
 mat-card-title {
-  font-size: 1.8rem;
+  font-size: 2rem;
+  font-weight: 700;
   margin-bottom: 0.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 mat-card-subtitle {
   font-size: 1rem;
+  color: #6b7280;
+  font-weight: 400;
 }
 
 .difficulty-selector {
   display: flex;
   flex-direction: column;
   margin-bottom: 2rem;
+  gap: 1rem;
 }
 
 .difficulty-selector label {
-  margin-bottom: 0.5rem;
-  font-weight: 500;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+mat-select {
+  font-size: 1rem;
+  background: #f9fafb;
+  border-radius: 8px;
 }
 
 mat-card-actions {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  padding: 1rem 0;
+  padding: 1rem 0 0 0;
 }
 
 button {
   width: 100%;
+  padding: 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+button[color="primary"] {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  transform: translateY(0);
+}
+
+button[color="primary"]:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+}
+
+button[color="accent"] {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  border: none;
+}
+
+button[color="accent"]:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(245, 87, 108, 0.4);
+}
+
+button[color="warn"] {
+  background: #e5e7eb;
+  color: #6b7280;
+  border: none;
+}
+
+button[color="warn"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 @media (min-width: 768px) {
   mat-card-actions {
     flex-direction: row;
     justify-content: space-between;
+    gap: 1.5rem;
   }
   
   button {
     width: auto;
+    flex: 1;
+    min-width: 140px;
+  }
+}
+
+@media (max-width: 480px) {
+  .menu-card {
+    padding: 1.5rem;
+  }
+  
+  mat-card-title {
+    font-size: 1.75rem;
   }
 }

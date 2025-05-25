@@ -3,7 +3,17 @@
   [class.original]="isOriginal" 
   [class.selected]="isSelected"
   [class.same-number]="isSameNumber"
+  [class.conflict]="isConflict"
+  [class.highlighted]="isHighlighted"
   (click)="onClick()"
 >
-  {{ value !== 0 ? value : '' }}
+  <!-- Main value display -->
+  <div class="cell-value" *ngIf="value !== 0">{{ value }}</div>
+  
+  <!-- Notes display in a single 3x3 grid -->
+  <div class="notes-grid" *ngIf="value === 0 && notes.length > 0">
+    <div class="note-cell" *ngFor="let position of [1,2,3,4,5,6,7,8,9]">
+      <span *ngIf="notes.includes(position)">{{ position }}</span>
+    </div>
+  </div>
 </div>

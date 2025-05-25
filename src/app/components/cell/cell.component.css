@@ -4,29 +4,121 @@
   align-items: center;
   width: 100%;
   height: 100%;
-  font-size: 1.5rem;
-  font-weight: 500;
+  border: 1px solid #d1d5db;
   cursor: pointer;
   user-select: none;
-  transition: background-color 0.2s ease;
+  transition: all 0.2s ease;
+  background-color: white;
+  position: relative;
+  /* Ensure cells maintain proper size */
+  flex-shrink: 0;
+  box-sizing: border-box;
+  overflow: hidden; /* Prevent content from overflowing */
+  /* Force square aspect ratio for cells */
+  aspect-ratio: 1;
 }
 
-.cell.original {
-  font-weight: bold;
-  color: #333;
-  background-color: #f5f5f5;
+.cell:hover {
+  background-color: #f3f4f6;
 }
 
 .cell.selected {
-  background-color: #e3f2fd;
+  background-color: #dbeafe !important;
+  border-color: #3b82f6;
+  box-shadow: inset 0 0 0 2px #3b82f6;
+}
+
+.cell.original {
+  font-weight: 700;
+  color: #1f2937;
+  background-color: #f9fafb;
 }
 
 .cell.same-number {
-  background-color: #e8f5e9;
+  background-color: #ecfdf5;
 }
 
+.cell.conflict {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+
+.cell.highlighted {
+  background-color: #fef3c7;
+}
+
+/* Main value styling */
+.cell-value {
+  font-size: 2rem;
+  font-weight: 600;
+  color: #374151;
+  line-height: 1;
+}
+
+.cell.original .cell-value {
+  color: #1f2937;
+  font-weight: 700;
+}
+
+/* Notes grid styling - Completely redesigned */
+.notes-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-rows: repeat(3, 1fr);
+  grid-template-columns: repeat(3, 1fr);
+  padding: 3px;
+  box-sizing: border-box;
+}
+
+.notes-row {
+  display: contents; /* This makes the grid items flow directly into the parent grid */
+}
+
+.note-cell {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #6b7280;
+  line-height: 1;
+  min-height: 0;
+}
+
+.note-cell span {
+  font-size: inherit;
+  line-height: 1;
+}
+
+/* Responsive design */
 @media (max-width: 768px) {
   .cell {
-    font-size: 1.2rem;
+    min-height: 45px;
+  }
+  
+  .cell-value {
+    font-size: 1.5rem;
+  }
+  
+  .note-cell span {
+    font-size: 0.6rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .cell {
+    min-height: 70px;
+  }
+  
+  .cell-value {
+    font-size: 2.25rem;
+  }
+  
+  .note-cell span {
+    font-size: 0.8rem;
   }
 }
