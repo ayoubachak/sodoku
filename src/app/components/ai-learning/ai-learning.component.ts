@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -7,9 +7,28 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSliderModule } from '@angular/material/slider';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { FormsModule } from '@angular/forms';
 import { CellComponent } from '../cell/cell.component';
 import { SudokuService } from '../../services/sudoku.service';
+import Chart from 'chart.js/auto';
+
+interface ModelData {
+  algorithm: 'ppo' | 'dqn';
+  weights: any;
+  configuration: {
+    learningRate: number;
+    batchSize: number;
+    entropyCoef?: number;
+    discountFactor?: number;
+  };
+  stats: {
+    accuracy: number;
+    averageReward: number;
+    episodes: number;
+  };
+  timestamp: number;
+}
 
 @Component({
   selector: 'app-ai-learning',
@@ -28,20 +47,49 @@ import { SudokuService } from '../../services/sudoku.service';
   templateUrl: './ai-learning.component.html',
   styleUrl: './ai-learning.component.css'
 })
-export class AiLearningComponent implements OnInit {
-  // Add Math property to make it available in the template
+export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
+  // Make Math available in template
   Math = Math;
   
+  // Core properties
   loading = true;
   board: number[][] = [];
   solution: number[][] = [];
   selectedAlgorithm: 'ppo' | 'dqn' = 'ppo';
+  
+  // Training state
   isTraining = false;
   progress = 0;
   trainingSpeed = 50; // Default speed (0-100)
   episodes = 0;
+  
+  // Advanced settings
+  showAdvancedSettings = false;
+  learningRate = 0.001;
+  batchSize = 64;
+  entropyCoef = 0.05;
+  discountFactor = 0.99;
+  
+  // Training stats
   currentReward = 0;
   averageReward = 0;
+  accuracy = 0;
+  
+  // Testing stats
+  showModelPerformance = false;
+  testAccuracy = 0;
+  testTime = 0;
+  correctCells = 0;
+  totalTestCells = 0;
+  
+  // Chart related
+  accuracyChart: Chart | null = null;
+  rewardChart: Chart | null = null;
+  accuracyHistory: number[] = [];
+  rewardHistory: number[] = [];
+  episodeLabels: number[] = [];
+  
+  // Visualizations
   cellHighlights: { row: number, col: number, value: number }[] = [];
   networkVisualization: any[] = [];
   
@@ -59,12 +107,26 @@ export class AiLearningComponent implements OnInit {
 
   constructor(
     private router: Router,
-    private sudokuService: SudokuService
+    private sudokuService: SudokuService,
+    private snackBar: MatSnackBar
   ) {}
 
   ngOnInit(): void {
     // Initialize board
     this.initializeBoard();
+  }
+  
+  ngAfterViewInit(): void {
+    // Create empty charts
+    this.initializeCharts();
+  }
+  
+  ngOnDestroy(): void {
+    // Cleanup charts when component is destroyed
+    this.destroyCharts();
+    if (this.isTraining) {
+      this.stopTraining();
+    }
   }
 
   private initializeBoard(): void {
@@ -74,6 +136,8 @@ export class AiLearningComponent implements OnInit {
       this.solution = JSON.parse(JSON.stringify(boardData.solution));
       this.initializeCellData();
       this.loading = false;
+      this.showModelPerformance = false;
+      this.cellHighlights = [];
     });
   }
 
@@ -115,6 +179,10 @@ export class AiLearningComponent implements OnInit {
     return sections;
   }
 
+  toggleAdvancedSettings(): void {
+    this.showAdvancedSettings = !this.showAdvancedSettings;
+  }
+
   startTraining(): void {
     if (this.isTraining) {
       this.stopTraining();
@@ -124,6 +192,12 @@ export class AiLearningComponent implements OnInit {
     this.isTraining = true;
     this.progress = 0;
     this.episodes = 0;
+    this.accuracyHistory = [];
+    this.rewardHistory = [];
+    this.episodeLabels = [];
+    this.accuracy = 0;
+    
+    this.resetCharts();
     
     // Simulate training with intervals
     this.trainWithAlgorithm();
@@ -160,6 +234,9 @@ export class AiLearningComponent implements OnInit {
       this.currentReward = Math.random() * 2 - 0.5; // -0.5 to 1.5
       this.averageReward = (this.averageReward * (this.episodes - 1) + this.currentReward) / this.episodes;
       
+      // Simulate accuracy (increasing over time)
+      this.accuracy = Math.min(95, (this.progress / 100) * 90 + Math.random() * 10);
+      
       // Simulate AI focusing on specific cells
       this.resetHighlights();
       const numHighlights = Math.floor(Math.random() * 3) + 1;
@@ -178,8 +255,18 @@ export class AiLearningComponent implements OnInit {
         }
       }
       
+      // Keep only the last 5 highlights
+      if (this.cellHighlights.length > 5) {
+        this.cellHighlights = this.cellHighlights.slice(-5);
+      }
+      
       // Generate fake network visualization data
       this.generateNetworkVisualization();
+      
+      // Update charts
+      if (this.episodes % 5 === 0) {
+        this.updateCharts();
+      }
       
       // Continue training until reaching 100%
       if (this.progress < 100) {
@@ -189,11 +276,124 @@ export class AiLearningComponent implements OnInit {
         // Training complete
         this.progress = 100;
         this.isTraining = false;
+        this.snackBar.open('Training complete!', 'Close', { duration: 3000 });
       }
     };
     
     // Start training loop
     trainingStep();
+  }
+
+  initializeCharts(): void {
+    // Setup chart contexts
+    const accuracyCtx = document.getElementById('accuracyChart') as HTMLCanvasElement;
+    const rewardCtx = document.getElementById('rewardChart') as HTMLCanvasElement;
+    
+    if (!accuracyCtx || !rewardCtx) return;
+    
+    // Create charts
+    this.accuracyChart = new Chart(accuracyCtx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Accuracy %',
+          data: [],
+          borderColor: 'rgba(75, 192, 192, 1)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+          tension: 0.4,
+          fill: true
+        }]
+      },
+      options: {
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100
+          }
+        },
+        responsive: true,
+        maintainAspectRatio: false
+      }
+    });
+    
+    this.rewardChart = new Chart(rewardCtx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Average Reward',
+          data: [],
+          borderColor: 'rgba(153, 102, 255, 1)',
+          backgroundColor: 'rgba(153, 102, 255, 0.2)',
+          tension: 0.4,
+          fill: true
+        }]
+      },
+      options: {
+        scales: {
+          y: {
+            beginAtZero: false
+          }
+        },
+        responsive: true,
+        maintainAspectRatio: false
+      }
+    });
+  }
+  
+  updateCharts(): void {
+    if (!this.accuracyChart || !this.rewardChart) {
+      return;
+    }
+    
+    // Add data points
+    this.episodeLabels.push(this.episodes);
+    this.accuracyHistory.push(this.accuracy);
+    this.rewardHistory.push(this.averageReward);
+    
+    // Limit chart data points for performance
+    const maxDataPoints = 50;
+    if (this.episodeLabels.length > maxDataPoints) {
+      this.episodeLabels = this.episodeLabels.slice(-maxDataPoints);
+      this.accuracyHistory = this.accuracyHistory.slice(-maxDataPoints);
+      this.rewardHistory = this.rewardHistory.slice(-maxDataPoints);
+    }
+    
+    // Update charts
+    this.accuracyChart.data.labels = this.episodeLabels;
+    this.accuracyChart.data.datasets[0].data = this.accuracyHistory;
+    this.accuracyChart.update();
+    
+    this.rewardChart.data.labels = this.episodeLabels;
+    this.rewardChart.data.datasets[0].data = this.rewardHistory;
+    this.rewardChart.update();
+  }
+  
+  resetCharts(): void {
+    if (this.accuracyChart) {
+      this.accuracyChart.data.labels = [];
+      this.accuracyChart.data.datasets[0].data = [];
+      this.accuracyChart.update();
+    }
+    
+    if (this.rewardChart) {
+      this.rewardChart.data.labels = [];
+      this.rewardChart.data.datasets[0].data = [];
+      this.rewardChart.update();
+    }
+  }
+  
+  destroyCharts(): void {
+    if (this.accuracyChart) {
+      this.accuracyChart.destroy();
+      this.accuracyChart = null;
+    }
+    
+    if (this.rewardChart) {
+      this.rewardChart.destroy();
+      this.rewardChart = null;
+    }
   }
 
   generateNetworkVisualization(): void {
@@ -264,6 +464,160 @@ export class AiLearningComponent implements OnInit {
     };
     
     solveStep();
+  }
+  
+  generateNewSudoku(): void {
+    this.initializeBoard();
+  }
+  
+  testOnCurrentBoard(): void {
+    // Simulate testing the trained model on the current board
+    this.showModelPerformance = true;
+    this.resetHighlights();
+    
+    // Start with all empty cells
+    this.totalTestCells = 0;
+    this.correctCells = 0;
+    
+    let emptyCells = [];
+    for (let row = 0; row < 9; row++) {
+      for (let col = 0; col < 9; col++) {
+        if (this.board[row][col] === 0) {
+          emptyCells.push({ row, col });
+          this.totalTestCells++;
+        }
+      }
+    }
+    
+    // Simulate the actual testing
+    const startTime = performance.now();
+    
+    // Shuffle the empty cells
+    emptyCells = this.shuffleArray(emptyCells);
+    
+    // Process cells with a delay to visualize the process
+    let cellIndex = 0;
+    const processCell = () => {
+      if (cellIndex >= emptyCells.length) {
+        // Testing complete
+        const endTime = performance.now();
+        this.testTime = Math.round(endTime - startTime);
+        this.testAccuracy = (this.correctCells / this.totalTestCells) * 100;
+        return;
+      }
+      
+      this.resetHighlights();
+      const { row, col } = emptyCells[cellIndex];
+      this.cellData[row][col].isHighlighted = true;
+      
+      // Determine if the model gets this cell correct (simulate with probability based on training progress)
+      // Higher training progress = higher chance of being correct
+      const correctProb = 0.5 + (this.progress / 200); // 50% to 100% chance
+      const isCorrect = Math.random() < correctProb;
+      
+      setTimeout(() => {
+        if (isCorrect) {
+          this.board[row][col] = this.solution[row][col];
+          this.cellData[row][col].value = this.solution[row][col];
+          this.correctCells++;
+        } else {
+          // Fill with a wrong value
+          let wrongValue;
+          do {
+            wrongValue = Math.floor(Math.random() * 9) + 1;
+          } while (wrongValue === this.solution[row][col]);
+          
+          this.board[row][col] = wrongValue;
+          this.cellData[row][col].value = wrongValue;
+        }
+        
+        cellIndex++;
+        if (cellIndex < emptyCells.length) {
+          setTimeout(processCell, 100);
+        } else {
+          // Show final stats
+          const endTime = performance.now();
+          this.testTime = Math.round(endTime - startTime);
+          this.testAccuracy = (this.correctCells / this.totalTestCells) * 100;
+        }
+      }, 200);
+    };
+    
+    processCell();
+  }
+  
+  saveModel(): void {
+    // Simulate saving the model to localStorage
+    const modelData: ModelData = {
+      algorithm: this.selectedAlgorithm,
+      weights: { /* Would contain actual model weights */ },
+      configuration: {
+        learningRate: this.learningRate,
+        batchSize: this.batchSize,
+        ...(this.selectedAlgorithm === 'ppo' ? { entropyCoef: this.entropyCoef } : { discountFactor: this.discountFactor })
+      },
+      stats: {
+        accuracy: this.accuracy,
+        averageReward: this.averageReward,
+        episodes: this.episodes
+      },
+      timestamp: Date.now()
+    };
+    
+    localStorage.setItem('sudoku_ai_model', JSON.stringify(modelData));
+    
+    this.snackBar.open('Model saved successfully!', 'Close', {
+      duration: 3000
+    });
+  }
+  
+  loadModel(): void {
+    // Simulate loading the model from localStorage
+    const savedModel = localStorage.getItem('sudoku_ai_model');
+    
+    if (savedModel) {
+      try {
+        const modelData: ModelData = JSON.parse(savedModel);
+        
+        // Apply saved settings
+        this.selectedAlgorithm = modelData.algorithm;
+        this.learningRate = modelData.configuration.learningRate;
+        this.batchSize = modelData.configuration.batchSize;
+        
+        if (modelData.algorithm === 'ppo' && modelData.configuration.entropyCoef) {
+          this.entropyCoef = modelData.configuration.entropyCoef;
+        } else if (modelData.algorithm === 'dqn' && modelData.configuration.discountFactor) {
+          this.discountFactor = modelData.configuration.discountFactor;
+        }
+        
+        // Apply saved stats
+        this.accuracy = modelData.stats.accuracy;
+        this.averageReward = modelData.stats.averageReward;
+        this.episodes = modelData.stats.episodes;
+        this.progress = 100; // Assume a loaded model is fully trained
+        
+        // Generate visualization based on loaded model
+        this.generateNetworkVisualization();
+        
+        // Update chart data
+        this.accuracyHistory = [this.accuracy];
+        this.rewardHistory = [this.averageReward];
+        this.episodeLabels = [this.episodes]; 
+        this.updateCharts();
+        
+        this.snackBar.open('Model loaded successfully!', 'Close', {
+          duration: 3000
+        });
+      } catch (error) {
+        this.snackBar.open('Failed to load model: Invalid model data', 'Close', {
+          duration: 3000
+        });
+      }
+    } else {
+      this.snackBar.open('No saved model found!', 'Close', {
+        duration: 3000
+      });
+    }
   }
 
   shuffleArray<T>(array: T[]): T[] {

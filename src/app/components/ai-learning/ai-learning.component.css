@@ -114,11 +114,63 @@ mat-card-content {
   margin-bottom: 0.5rem;
   font-weight: 500;
   color: #4b5563;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-mat-select {
-  width: 100%;
-  margin-bottom: 0.5rem;
+.toggle-button {
+  padding: 0;
+  margin: 0;
+  min-width: auto;
+  width: 24px;
+  height: 24px;
+  line-height: 24px;
+}
+
+/* Advanced settings */
+.advanced-settings {
+  background-color: #f9fafb;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 0.5rem 0;
+  border-left: 4px solid #4c1d95;
+}
+
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.setting-row:last-child {
+  margin-bottom: 0;
+}
+
+.setting-row span {
+  font-weight: 500;
+  color: #4b5563;
+  flex: 1;
+}
+
+.slider-with-value {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 2;
+}
+
+.slider-with-value mat-slider {
+  flex: 1;
+}
+
+.slider-with-value span {
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+  color: #4c1d95;
+  width: 60px;
+  text-align: right;
 }
 
 /* Algorithm description */
@@ -143,48 +195,47 @@ mat-select {
   color: #4b5563;
 }
 
-/* Training speed slider */
-mat-slider {
-  width: 100%;
-  margin: 0.5rem 0;
-}
-
-/* Action buttons */
-.action-buttons {
+/* Model save/load controls */
+.model-controls {
   display: flex;
-  flex-wrap: wrap;
   gap: 1rem;
-  margin-top: 1.5rem;
-  padding-bottom: 0.5rem;
+  margin-top: 1rem;
+  justify-content: space-between;
 }
 
-.action-buttons button {
+.model-controls button {
   flex: 1;
-  min-width: 140px;
-  padding: 0.75rem 1rem;
-}
-
-@media (max-width: 768px) {
-  .action-buttons {
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-  
-  .action-buttons button {
-    width: 100%;
-  }
-}
-
-/* Progress bar */
-.progress-container {
-  margin: 1rem 0;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
-.progress-container mat-progress-bar {
+/* Charts */
+.chart-container {
+  height: 200px;
+  margin: 1.5rem 0;
+  background-color: #f8fafc;
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Board actions */
+.board-actions {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  width: 100%;
+  max-width: 500px;
+}
+
+.board-actions button {
   flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
 /* Stats */
@@ -459,6 +510,14 @@ mat-slider {
     order: 1;
     margin-bottom: 2rem;
   }
+
+  .model-controls {
+    flex-direction: column;
+  }
+  
+  .chart-container {
+    height: 180px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -468,5 +527,19 @@ mat-slider {
 
   .action-buttons {
     flex-direction: column;
+  }
+  
+  .board-actions {
+    flex-direction: column;
+  }
+  
+  .setting-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .slider-with-value {
+    width: 100%;
   }
 }
