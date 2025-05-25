@@ -6,7 +6,9 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "build:prod": "ng build --configuration production --base-href /sudoku-game/",
+    "deploy": "npm run build:prod && npx angular-cli-ghpages --dir=dist/sudoku-game"
   },
   "private": true,
   "dependencies": {
