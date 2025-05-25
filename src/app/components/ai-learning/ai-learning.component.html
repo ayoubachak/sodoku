@@ -16,19 +16,20 @@
     <p>Preparing AI playground...</p>
   </div>
 
-  <!-- Main content area with left sidebar and right board -->
+  <!-- Main content area with 3-column layout -->
   <div class="ai-content" *ngIf="!loading">
     <!-- Left sidebar with controls -->
     <div class="ai-controls">
       <mat-card>
         <mat-card-header>
-          <mat-card-title>Algorithm Settings</mat-card-title>
+          <mat-card-title>AI Training Controls</mat-card-title>
+          <mat-card-subtitle>Configure and train reinforcement learning agents</mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
           <!-- Algorithm Selection -->
           <div class="control-group">
             <label>Select Algorithm:</label>
-            <mat-select [(ngModel)]="selectedAlgorithm" [disabled]="isTraining">
+            <mat-select [(ngModel)]="selectedAlgorithm" [disabled]="isTraining" (selectionChange)="onAlgorithmChange()">
               <mat-option value="ppo">Proximal Policy Optimization (PPO)</mat-option>
               <mat-option value="dqn">Dueling Double DQN</mat-option>
             </mat-select>
@@ -48,7 +49,7 @@
                 <span>Learning Rate:</span>
                 <div class="slider-with-value">
                   <mat-slider min="0.0001" max="0.01" step="0.0001" [disabled]="isTraining">
-                    <input matSliderThumb [(ngModel)]="learningRate">
+                    <input matSliderThumb [(ngModel)]="learningRate" (ngModelChange)="updatePPOConfig()">
                   </mat-slider>
                   <span>{{learningRate.toFixed(4)}}</span>
                 </div>
@@ -57,7 +58,7 @@
                 <span>Batch Size:</span>
                 <div class="slider-with-value">
                   <mat-slider min="16" max="128" step="16" [disabled]="isTraining">
-                    <input matSliderThumb [(ngModel)]="batchSize">
+                    <input matSliderThumb [(ngModel)]="batchSize" (ngModelChange)="updatePPOConfig()">
                   </mat-slider>
                   <span>{{batchSize}}</span>
                 </div>
@@ -65,10 +66,10 @@
               <div class="setting-row" *ngIf="selectedAlgorithm === 'ppo'">
                 <span>Entropy Coefficient:</span>
                 <div class="slider-with-value">
-                  <mat-slider min="0.01" max="0.5" step="0.01" [disabled]="isTraining">
-                    <input matSliderThumb [(ngModel)]="entropyCoef">
+                  <mat-slider min="0.001" max="0.1" step="0.001" [disabled]="isTraining">
+                    <input matSliderThumb [(ngModel)]="entropyCoef" (ngModelChange)="updatePPOConfig()">
                   </mat-slider>
-                  <span>{{entropyCoef.toFixed(2)}}</span>
+                  <span>{{entropyCoef.toFixed(3)}}</span>
                 </div>
               </div>
               <div class="setting-row" *ngIf="selectedAlgorithm === 'dqn'">
@@ -113,211 +114,143 @@
             <button 
               mat-raised-button 
               [color]="isTraining ? 'warn' : 'primary'"
-              (click)="startTraining()">
+              (click)="startTraining()"
+              class="primary-action">
               <mat-icon>{{isTraining ? 'stop' : 'play_arrow'}}</mat-icon>
               {{isTraining ? 'Stop Training' : 'Start Training'}}
             </button>
+            
             <button 
-              mat-raised-button 
-              color="accent"
-              [disabled]="isTraining || progress < 100"
-              (click)="testModel()">
-              <mat-icon>science</mat-icon>
+              mat-stroked-button 
+              color="accent" 
+              (click)="testModel()" 
+              [disabled]="isTraining || progress === 0">
+              <mat-icon>psychology</mat-icon>
               Test Model
+            </button>
+            
+            <button 
+              mat-stroked-button 
+              (click)="generateNewSudoku()" 
+              [disabled]="isTraining">
+              <mat-icon>refresh</mat-icon>
+              New Puzzle
             </button>
           </div>
 
-          <!-- Model Save/Load Controls -->
-          <div class="model-controls">
-            <button 
-              mat-raised-button 
-              class="save-btn"
-              [disabled]="isTraining || progress < 20"
-              (click)="saveModel()">
-              <mat-icon>save</mat-icon>
-              Save Model
-            </button>
-            <button 
-              mat-raised-button 
-              class="download-btn"
-              [disabled]="isTraining || progress < 20"
-              (click)="downloadModel()">
-              <mat-icon>download</mat-icon>
-              Download
-            </button>
-            <button 
-              mat-raised-button 
-              class="load-btn"
-              [disabled]="isTraining"
-              (click)="triggerFileInput()">
-              <mat-icon>file_upload</mat-icon>
-              Load Model
-            </button>
-            <!-- Hidden file input for loading model JSON files -->
-            <input 
-              type="file" 
-              #fileInput
-              style="display: none;" 
-              accept="application/json" 
-              (change)="handleFileUpload($event)"
-            />
+          <!-- Model Management -->
+          <div class="model-management">
+            <h4>Model Management</h4>
+            <div class="model-actions">
+              <button mat-button (click)="saveModel()" [disabled]="progress === 0">
+                <mat-icon>save</mat-icon>
+                Save Model
+              </button>
+              <button mat-button (click)="loadModel()">
+                <mat-icon>folder_open</mat-icon>
+                Load Model
+              </button>
+              <button mat-button (click)="exportModel()" [disabled]="progress === 0">
+                <mat-icon>download</mat-icon>
+                Export
+              </button>
+              <button mat-button (click)="triggerFileInput()">
+                <mat-icon>upload</mat-icon>
+                Import
+              </button>
+            </div>
+            <input #fileInput type="file" accept=".json" (change)="onFileSelected($event)" style="display: none;">
           </div>
         </mat-card-content>
       </mat-card>
 
-      <!-- Training Statistics -->
+      <!-- Training Progress -->
       <mat-card *ngIf="isTraining || progress > 0">
         <mat-card-header>
           <mat-card-title>Training Progress</mat-card-title>
         </mat-card-header>
         <mat-card-content>
-          <div class="progress-container">
-            <mat-progress-bar [value]="progress"></mat-progress-bar>
-            <span>{{progress.toFixed(1)}}%</span>
-          </div>
-          
-          <div class="stats">
-            <div class="stat-item">
-              <div class="stat-label">Episodes:</div>
-              <div class="stat-value">{{episodes}}</div>
+          <div class="progress-section">
+            <div class="progress-header">
+              <span>Episode {{episodes}}</span>
+              <span>{{progress.toFixed(1)}}%</span>
             </div>
-            <div class="stat-item">
-              <div class="stat-label">Current Reward:</div>
-              <div class="stat-value">{{currentReward.toFixed(2)}}</div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-label">Average Reward:</div>
-              <div class="stat-value">{{averageReward.toFixed(2)}}</div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-label">Accuracy:</div>
-              <div class="stat-value">{{accuracy.toFixed(2)}}%</div>
-            </div>
+            <mat-progress-bar [value]="progress" mode="determinate"></mat-progress-bar>
           </div>
 
-          <!-- Accuracy Chart -->
-          <div class="chart-container">
-            <ngx-charts-line-chart
-              [view]="[500, 200]"
-              [scheme]="colorScheme"
-              [results]="accuracyChartData"
-              [gradient]="true"
-              [xAxis]="showXAxis"
-              [yAxis]="showYAxis"
-              [legend]="false"
-              [showXAxisLabel]="false"
-              [showYAxisLabel]="false"
-              [xAxisLabel]="xAxisLabel"
-              [yAxisLabel]="yAxisLabelAccuracy"
-              [autoScale]="true"
-              [timeline]="false"
-              [animations]="false">
-            </ngx-charts-line-chart>
-          </div>
-
-          <!-- Reward Chart -->
-          <div class="chart-container">
-            <ngx-charts-line-chart
-              [view]="[500, 200]"
-              [scheme]="colorScheme"
-              [results]="rewardChartData"
-              [gradient]="true"
-              [xAxis]="showXAxis"
-              [yAxis]="showYAxis"
-              [legend]="false"
-              [showXAxisLabel]="false"
-              [showYAxisLabel]="false"
-              [xAxisLabel]="xAxisLabel"
-              [yAxisLabel]="yAxisLabelReward"
-              [autoScale]="true"
-              [timeline]="false"
-              [animations]="false">
-            </ngx-charts-line-chart>
-          </div>
-        </mat-card-content>
-      </mat-card>
-
-      <!-- Network Visualization -->
-      <mat-card *ngIf="networkVisualization.length > 0">
-        <mat-card-header>
-          <mat-card-title>Network Visualization</mat-card-title>
-        </mat-card-header>
-        <mat-card-content>
-          <div class="network-viz">
-            <div class="network-layer" *ngFor="let layer of networkVisualization; let i = index">
-              <div class="layer-label">{{i === 0 ? 'Input' : i === networkVisualization.length - 1 ? 'Output' : 'Hidden'}}</div>
-              <div class="layer-nodes">
-                <div 
-                  class="node" 
-                  *ngFor="let node of layer"
-                  [style.opacity]="0.3 + (node.value * 0.7)"
-                  [class]="node.size">
-                </div>
-                <div class="node-count" *ngIf="layer.length > 10">+{{getMoreNodesCount(layer)}} more</div>
-              </div>
+          <div class="stats-grid">
+            <div class="stat-item">
+              <span class="stat-label">Accuracy</span>
+              <span class="stat-value">{{accuracy.toFixed(1)}}%</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Avg Reward</span>
+              <span class="stat-value">{{averageReward.toFixed(2)}}</span>
+            </div>
+            <div class="stat-item" *ngIf="selectedAlgorithm === 'ppo'">
+              <span class="stat-label">Actor Loss</span>
+              <span class="stat-value">{{actorLoss.toFixed(4)}}</span>
+            </div>
+            <div class="stat-item" *ngIf="selectedAlgorithm === 'ppo'">
+              <span class="stat-label">Critic Loss</span>
+              <span class="stat-value">{{criticLoss.toFixed(4)}}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Total Steps</span>
+              <span class="stat-value">{{totalSteps}}</span>
             </div>
           </div>
         </mat-card-content>
       </mat-card>
     </div>
 
-    <!-- Right side with game board -->
-    <div class="ai-board">
-      <div class="board-actions">
-        <button 
-          mat-raised-button 
-          color="primary"
-          (click)="generateNewSudoku()"
-          [disabled]="isTraining">
-          <mat-icon>refresh</mat-icon>
-          New Puzzle
-        </button>
-        <button 
-          mat-raised-button 
-          color="accent"
-          (click)="testOnCurrentBoard()"
-          [disabled]="isTraining || progress < 20">
-          <mat-icon>play_arrow</mat-icon>
-          Test on This Puzzle
-        </button>
-      </div>
-
-      <div class="sudoku-board">
-        <div class="board-grid">
-          <div class="board-section" *ngFor="let section of getSections(); let sectionIndex = index">
-            <app-cell
-              *ngFor="let cell of section; let cellIndex = index"
-              [value]="cell.value"
-              [notes]="cell.notes"
-              [isOriginal]="cell.isOriginal"
-              [isSelected]="cell.isSelected"
-              [isSameNumber]="cell.isSameNumber"
-              [isHighlighted]="cell.isHighlighted"
-            ></app-cell>
-          </div>
-        </div>
-      </div>
-
-      <!-- Algorithm reasoning visualization -->
-      <div class="action-description" *ngIf="cellHighlights.length > 0">
-        <h3>AI's Thinking Process</h3>
-        <div class="action-items">
-          <div class="action-item" *ngFor="let highlight of cellHighlights.slice(-3); let i = index">
-            <div class="action-cell">
-              <div class="row-col">R{{highlight.row+1}}C{{highlight.col+1}}</div>
-              <div class="value">{{highlight.value}}</div>
-            </div>
-            <div class="action-reasoning">
-              <p *ngIf="selectedAlgorithm === 'ppo'">
-                Policy predicts {{highlight.value}} (probability: {{getThinkingProbability(i).toFixed(2)}})
-              </p>
-              <p *ngIf="selectedAlgorithm === 'dqn'">
-                Q-value for ({{highlight.row+1}},{{highlight.col+1}},{{highlight.value}}): {{getThinkingQValue(i).toFixed(2)}}
-              </p>
+    <!-- Center column - Sudoku board and visualization -->
+    <div class="ai-board-area">
+      <!-- Sudoku Game Board -->
+      <mat-card class="board-card">
+        <mat-card-header>
+          <mat-card-title>AI Learning Board</mat-card-title>
+          <mat-card-subtitle>Watch the AI make decisions in real-time</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="sudoku-board">
+            <div class="board-grid">
+              <div class="board-section" *ngFor="let section of getSections(); let i = index">
+                <app-cell
+                  *ngFor="let cell of section"
+                  [value]="cell.value"
+                  [notes]="cell.notes"
+                  [isOriginal]="cell.isOriginal"
+                  [isSelected]="cell.isSelected"
+                  [isSameNumber]="cell.isSameNumber"
+                  [isHighlighted]="cell.isHighlighted"
+                  [isCoachHighlighted]="cell.isHighlighted"
+                  (cellClick)="onCellClick(cell.row, cell.col)">
+                </app-cell>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+
+          <!-- Current Move Information -->
+          <div class="current-move" *ngIf="cellHighlights.length > 0">
+            <h4>AI Decision</h4>
+            <div class="highlight-info" *ngFor="let highlight of cellHighlights; let i = index">
+              <div class="move-details">
+                <div class="row-col">R{{highlight.row+1}}C{{highlight.col+1}}</div>
+                <div class="value">{{highlight.value}}</div>
+              </div>
+              <div class="action-reasoning">
+                <p *ngIf="selectedAlgorithm === 'ppo'">
+                  Policy predicts {{highlight.value}} (probability: {{getThinkingProbability(i).toFixed(2)}})
+                </p>
+                <p *ngIf="selectedAlgorithm === 'dqn'">
+                  Q-value for ({{highlight.row+1}},{{highlight.col+1}},{{highlight.value}}): {{getThinkingQValue(i).toFixed(2)}}
+                </p>
+              </div>
+            </div>
+          </div>
+        </mat-card-content>
+      </mat-card>
 
       <!-- Model Performance Stats (when testing on new puzzles) -->
       <div class="model-performance" *ngIf="showModelPerformance">
@@ -326,23 +259,86 @@
             <mat-card-title>Model Performance</mat-card-title>
           </mat-card-header>
           <mat-card-content>
-            <div class="stats">
-              <div class="stat-item">
-                <div class="stat-label">Accuracy:</div>
-                <div class="stat-value">{{testAccuracy.toFixed(2)}}%</div>
+            <div class="performance-stats">
+              <div class="performance-stat">
+                <span class="perf-label">Test Accuracy</span>
+                <span class="perf-value">{{testAccuracy.toFixed(1)}}%</span>
               </div>
-              <div class="stat-item">
-                <div class="stat-label">Completion Time:</div>
-                <div class="stat-value">{{testTime}}ms</div>
+              <div class="performance-stat">
+                <span class="perf-label">Correct Cells</span>
+                <span class="perf-value">{{correctCells}}/{{totalTestCells}}</span>
               </div>
-              <div class="stat-item">
-                <div class="stat-label">Correct Cells:</div>
-                <div class="stat-value">{{correctCells}} / {{totalTestCells}}</div>
+              <div class="performance-stat">
+                <span class="perf-label">Test Time</span>
+                <span class="perf-value">{{testTime.toFixed(0)}}ms</span>
               </div>
             </div>
+            <button mat-button (click)="testOnCurrentBoard()" [disabled]="isTraining">
+              <mat-icon>quiz</mat-icon>
+              Test on Current Board
+            </button>
           </mat-card-content>
         </mat-card>
       </div>
+    </div>
+
+    <!-- Right column - Analytics and Visualization -->
+    <div class="ai-analytics" *ngIf="progress > 0">
+      <mat-card class="analytics-card">
+        <mat-card-header>
+          <mat-card-title>Training Analytics</mat-card-title>
+          <mat-card-subtitle>Real-time learning progress visualization</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          <!-- Accuracy Chart -->
+          <div class="chart-section">
+            <h4>Learning Accuracy</h4>
+            <ngx-charts-line-chart
+              [results]="accuracyChartData"
+              [view]="[340, 200]"
+              [xAxis]="showXAxis"
+              [yAxis]="showYAxis"
+              [legend]="showLegend"
+              [showXAxisLabel]="showXAxisLabel"
+              [showYAxisLabel]="showYAxisLabel"
+              [xAxisLabel]="xAxisLabel"
+              [yAxisLabel]="yAxisLabelAccuracy"
+              [autoScale]="autoScale">
+            </ngx-charts-line-chart>
+          </div>
+
+          <!-- Reward Chart -->
+          <div class="chart-section">
+            <h4>Average Reward</h4>
+            <ngx-charts-line-chart
+              [results]="rewardChartData"
+              [view]="[340, 200]"
+              [xAxis]="showXAxis"
+              [yAxis]="showYAxis"
+              [legend]="showLegend"
+              [showXAxisLabel]="showXAxisLabel"
+              [showYAxisLabel]="showYAxisLabel"
+              [xAxisLabel]="xAxisLabel"
+              [yAxisLabel]="yAxisLabelReward"
+              [autoScale]="autoScale">
+            </ngx-charts-line-chart>
+          </div>
+
+          <!-- Neural Network Visualization (Placeholder) -->
+          <div class="network-visualization">
+            <h4>Network Architecture</h4>
+            <div class="network-viz">
+              <div class="network-layer" *ngFor="let layer of [1, 2, 3, 4]; let i = index">
+                <div class="layer-label">{{i === 0 ? 'Input' : i === 3 ? 'Output' : 'Hidden ' + i}}</div>
+                <div class="layer-nodes">
+                  <div class="node small" *ngFor="let node of i === 0 ? [1, 2, 3, 4, 5] : (i === 3 ? [1, 2, 3] : [1, 2, 3, 4])"></div>
+                  <div class="node-count">{{i === 0 ? '81' : (i === 3 ? '9' : '64')}}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </mat-card-content>
+      </mat-card>
     </div>
   </div>
 </div>
