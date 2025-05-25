@@ -476,8 +476,9 @@ export class GameComponent implements OnInit, OnDestroy {
       this.highlightedCells = [...this.highlightedCells, ...technique.relatedCells];
     }
 
-    // Show a dialog explaining the technique
-    const dialogRef = this.dialog.open(TechniqueDialogComponent, {
+    // Configure the dialog to appear as a bottom section on mobile
+    const isMobile = window.innerWidth <= 600;
+    const dialogConfig = {
       data: {
         title: `Learn: ${technique.technique}`,
         message: `<p>${technique.detailExplanation || technique.explanation}</p>
@@ -490,11 +491,17 @@ export class GameComponent implements OnInit, OnDestroy {
         techniqueCount: this.pendingTechniques.length,
         currentIndex: this.currentTeachingIndex
       },
-      width: '400px',
-      panelClass: 'technique-dialog',
-      hasBackdrop: false,
-      autoFocus: false
-    });
+      width: isMobile ? '100%' : '400px',
+      panelClass: ['technique-dialog', 'technique-dialog-section'],
+      hasBackdrop: !isMobile,
+      autoFocus: false,
+      position: isMobile ? 
+        { bottom: '0', right: '0', left: '0' } : 
+        { top: '10px', right: '10px' }
+    };
+
+    // Show a dialog explaining the technique
+    const dialogRef = this.dialog.open(TechniqueDialogComponent, dialogConfig);
 
     dialogRef.afterClosed().subscribe(result => {
       if (result === 'apply') {
@@ -503,9 +510,6 @@ export class GameComponent implements OnInit, OnDestroy {
       } else if (result === 'skip-this') {
         // Skip just this instance and move to next technique
         this.skipCurrentTechnique();
-      } else if (result === 'skip-apply') {
-        // Apply the current technique and skip to the next one
-        this.applyAndSkipToNext();
       } else if (result === 'skip-type') {
         // Skip all techniques of this type
         this.skipTechniqueType(technique.technique);

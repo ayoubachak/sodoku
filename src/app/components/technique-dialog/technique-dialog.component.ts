@@ -11,7 +11,6 @@ export interface TechniqueDialogData {
   value?: number;
   position?: { row: number, col: number };
   showRevealOption?: boolean;
-  // Add properties for showing skip buttons
   showSkipOptions?: boolean;
   isTeachingMode?: boolean;
   techniqueCount?: number;
@@ -39,27 +38,32 @@ export interface TechniqueDialogData {
           <p class="progress-text">Technique {{ data.currentIndex + 1 }} of {{ data.techniqueCount }}</p>
         </div>
       </mat-dialog-content>
+      
       <mat-dialog-actions>
-        <button mat-button mat-dialog-close>Cancel</button>
-        <button mat-button *ngIf="data.showRevealOption" [mat-dialog-close]="'reveal'">Reveal Value</button>
-        
-        <!-- Skip buttons for teaching mode -->
-        <div class="skip-actions" *ngIf="data.showSkipOptions">
-          <button mat-button [mat-dialog-close]="'skip-this'" class="skip-button">
-            Skip
-          </button>
-          <button mat-button [mat-dialog-close]="'skip-apply'" class="skip-button apply-skip-button">
-            Skip & Apply
-          </button>
-          <button mat-button [mat-dialog-close]="'skip-type'" class="skip-button">
-            Skip All {{ data.technique }}
-          </button>
-          <button mat-button [mat-dialog-close]="'skip-all'" class="skip-button">
-            Skip to End
-          </button>
+        <div class="button-container">
+          <!-- Primary action buttons -->
+          <div class="primary-actions">
+            <button mat-raised-button color="primary" [mat-dialog-close]="'apply'" class="apply-button">
+              Apply
+            </button>
+            <button mat-button mat-dialog-close class="cancel-button">Cancel</button>
+          </div>
+
+          <!-- Skip options -->
+          <div class="skip-options" *ngIf="data.showSkipOptions">
+            <div class="skip-buttons">
+              <button mat-stroked-button [mat-dialog-close]="'skip-this'" class="skip-button">
+                Skip This
+              </button>
+              <button mat-stroked-button [mat-dialog-close]="'skip-type'" class="skip-button">
+                Skip All {{ data.technique }}
+              </button>
+              <button mat-stroked-button [mat-dialog-close]="'skip-all'" class="skip-button">
+                Skip to End
+              </button>
+            </div>
+          </div>
         </div>
-        
-        <button mat-raised-button color="primary" [mat-dialog-close]="'apply'">Apply</button>
       </mat-dialog-actions>
     </div>
   `,
@@ -90,93 +94,119 @@ export interface TechniqueDialogData {
 
     .technique-dialog-container {
       color: #333;
+      padding: 0 5px;
     }
 
     :host-context(.dark-theme) .technique-dialog-container {
       color: #f5f5f5;
     }
 
-    :host-context(.dark-theme) h2 {
-      color: #f3f4f6;
-    }
-
-    :host-context(.dark-theme) mat-dialog-content {
-      color: #e5e7eb;
+    mat-dialog-content {
+      margin-bottom: 1.5rem;
+      padding: 0;
     }
 
     .technique-details {
-      margin: 16px 0;
-      padding: 8px 16px;
-      background-color: #f5f5f5;
-      border-left: 4px solid #3f51b5;
-      border-radius: 4px;
-    }
-    
-    :host-context(.dark-theme) .technique-details {
-      background-color: #374151;
-      border-left-color: #7986cb;
-      color: #e5e7eb;
-    }
-    
-    .position, .value {
-      margin: 6px 0;
-    }
-    
-    mat-dialog-actions {
-      display: flex;
-      justify-content: flex-end;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-    
-    .skip-actions {
-      display: flex;
-      gap: 8px;
-      margin-right: auto;
-      flex-wrap: wrap;
-    }
-    
-    .skip-button {
-      font-size: 0.85rem;
-      padding: 0 8px;
-    }
-    
-    .apply-skip-button {
-      background-color: #e3f2fd;
-      border: 1px solid #bbdefb;
-    }
-    
-    :host-context(.dark-theme) .apply-skip-button {
-      background-color: #0d47a1;
-      color: white;
+      margin: 1rem 0;
+      padding: 0.75rem;
+      background: rgba(0, 0, 0, 0.04);
+      border-radius: 8px;
     }
 
-    :host-context(.dark-theme) .skip-button {
-      color: #e5e7eb;
+    .technique-details p {
+      margin: 0.5rem 0;
     }
 
-    :host-context(.dark-theme) button[mat-button]:not(.apply-skip-button) {
-      color: #e5e7eb;
-    }
-    
-    :host-context(.dark-theme) button[mat-button]:hover {
-      background-color: rgba(255, 255, 255, 0.08);
-    }
-    
     .teaching-progress {
-      margin-top: 16px;
+      margin-top: 1rem;
       text-align: center;
-      color: #666;
       font-style: italic;
+      color: rgba(0, 0, 0, 0.6);
     }
-    
-    :host-context(.dark-theme) .teaching-progress {
-      color: #aaa;
+
+    /* Button container layout */
+    .button-container {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      width: 100%;
     }
-    
-    .progress-text {
-      margin: 0;
-      font-size: 0.9rem;
+
+    /* Primary actions styling */
+    .primary-actions {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: flex-end;
+    }
+
+    .apply-button {
+      min-width: 100px;
+    }
+
+    /* Skip options styling */
+    .skip-options {
+      border-top: 1px solid rgba(0, 0, 0, 0.12);
+      padding-top: 1rem;
+    }
+
+    .skip-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .skip-button {
+      width: 100%;
+      justify-content: center;
+    }
+
+    /* Dark theme support */
+    :host-context(.dark-theme) {
+      .technique-details {
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .teaching-progress {
+        color: rgba(255, 255, 255, 0.7);
+      }
+
+      .skip-options {
+        border-top-color: rgba(255, 255, 255, 0.12);
+      }
+    }
+
+    /* Mobile responsive design */
+    @media (max-width: 600px) {
+      .technique-dialog-container {
+        padding: 1rem 0.75rem;
+      }
+
+      mat-dialog-content {
+        margin-bottom: 1rem;
+      }
+
+      .button-container {
+        gap: 0.75rem;
+      }
+
+      .primary-actions {
+        flex-direction: column-reverse;
+        gap: 0.5rem;
+      }
+
+      .apply-button,
+      .cancel-button {
+        width: 100%;
+        margin: 0;
+      }
+
+      .skip-buttons {
+        gap: 0.5rem;
+      }
+
+      .skip-button {
+        padding: 0.5rem;
+      }
     }
   `]
 })
