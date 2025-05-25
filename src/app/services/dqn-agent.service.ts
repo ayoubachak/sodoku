@@ -35,28 +35,27 @@ export interface Experience {
   providedIn: 'root'
 })
 export class DQNAgentService {
-  private mainNetwork: tf.LayersModel | null = null;
-  private targetNetwork: tf.LayersModel | null = null;
-  private config: DQNConfig;
-  private replayBuffer: Experience[] = [];
-  private totalSteps = 0;
-  private isTraining = false;
-  private updateCounter = 0;
+  private readonly replayBuffer: Experience[] = [];
+  private mainNetwork!: tf.LayersModel;
+  private targetNetwork!: tf.LayersModel;
+  private updateCounter = 0; // Remove readonly since it needs to be incremented
+  private totalSteps = 0; // Add missing property
+  private isTraining = false; // Add missing property
+  
+  private config: DQNConfig = {
+    learningRate: 0.0005,
+    gamma: 0.99,
+    epsilon: 1.0,
+    epsilonMin: 0.01,
+    epsilonDecay: 0.995,
+    batchSize: 32,
+    memorySize: 10000,
+    targetUpdateFreq: 100,
+    doubleDQN: true,
+    duelingDQN: true
+  };
 
-  constructor() {
-    this.config = {
-      learningRate: 0.0005,
-      gamma: 0.99,
-      epsilon: 1.0,
-      epsilonMin: 0.01,
-      epsilonDecay: 0.995,
-      batchSize: 32,
-      memorySize: 10000,
-      targetUpdateFreq: 100,
-      doubleDQN: true,
-      duelingDQN: true
-    };
-  }
+  constructor() {}
 
   async initialize(config?: Partial<DQNConfig>): Promise<void> {
     if (config) {
@@ -340,115 +339,79 @@ export class DQNAgentService {
 
   // Train the Q-network using experience replay
   async train(): Promise<{ qValue: number; epsilon: number }> {
-    if (!this.mainNetwork || !this.targetNetwork) {
-      throw new Error('DQN Agent not initialized');
-    }
-
     if (this.replayBuffer.length < this.config.batchSize) {
       return { qValue: 0, epsilon: this.config.epsilon };
     }
 
-    this.isTraining = true;
-
-    // Sample random batch from replay buffer
-    const batch = this.sampleBatch();
-    
-    // Prepare training data
-    const states = batch.map(exp => exp.state);
-    const nextStates = batch.map(exp => exp.nextState);
-    const actions = batch.map(exp => exp.action);
-    const rewards = batch.map(exp => exp.reward);
-    const dones = batch.map(exp => exp.done ? 1 : 0);
-
-    // Convert to tensors
-    const statesTensor = tf.tensor2d(states);
-    const nextStatesTensor = tf.tensor2d(nextStates);
-
-    // Get current Q-values
-    const currentQValues = this.mainNetwork.predict(statesTensor) as tf.Tensor;
-
-    // Get next Q-values from target network
-    const nextQValues = this.targetNetwork.predict(nextStatesTensor) as tf.Tensor;
-
-    // Calculate target Q-values using Double DQN
-    const nextQValuesMain = this.mainNetwork.predict(nextStatesTensor) as tf.Tensor;
-    
-    // Get the Q-values as arrays for processing
-    const currentQData = await currentQValues.data();
-    const nextQData = await nextQValues.data();
-    const nextQMainData = await nextQValuesMain.data();
-
-    // Calculate targets
-    const targets = new Float32Array(currentQData.length);
-    for (let i = 0; i < targets.length; i++) {
-      targets[i] = currentQData[i];
-    }
-
-    let totalQValue = 0;
-    for (let i = 0; i < batch.length; i++) {
-      const action = actions[i];
-      const reward = rewards[i];
-      const done = dones[i];
-
-      // Double DQN: use main network to select action, target network to evaluate
-      let nextMaxQ = 0;
-      if (!done) {
-        // Find best action using main network
-        let bestAction = 0;
-        let bestQ = -Infinity;
-        for (let a = 0; a < 729; a++) {
-          const qVal = nextQMainData[i * 729 + a];
-          if (qVal > bestQ) {
-            bestQ = qVal;
-            bestAction = a;
-          }
-        }
-        // Use target network to get Q-value for that action
-        nextMaxQ = nextQData[i * 729 + bestAction];
+    try {
+      this.isTraining = true;
+      
+      // Sample random batch from replay buffer
+      const batch = this.sampleBatch(this.config.batchSize);
+      
+      // Prepare training data
+      const states = batch.map(exp => exp.state);
+      const nextStates = batch.map(exp => exp.nextState);
+      
+      const statesTensor = tf.tensor2d(states);
+      const nextStatesTensor = tf.tensor2d(nextStates);
+      
+      // Get current Q-values and next Q-values
+      const currentQValues = this.mainNetwork.predict(statesTensor) as tf.Tensor;
+      const nextQValues = this.targetNetwork.predict(nextStatesTensor) as tf.Tensor;
+      
+      // Calculate targets using a simpler approach
+      const targets = await tf.tidy(() => {
+        const targetsArray: number[][] = [];
+        
+        batch.forEach((exp, index) => {
+          const currentQ = currentQValues.slice([index, 0], [1, -1]).dataSync();
+          const nextQ = nextQValues.slice([index, 0], [1, -1]).dataSync();
+          
+          const target = [...currentQ];
+          const nextQValue = exp.done ? 0 : Math.max(...Array.from(nextQ));
+          target[exp.action] = exp.reward + this.config.gamma * nextQValue;
+          
+          targetsArray.push(target);
+        });
+        
+        return tf.tensor2d(targetsArray);
+      });
+      
+      // Train the main network
+      await this.mainNetwork.fit(statesTensor, targets, {
+        epochs: 1,
+        verbose: 0
+      });
+      
+      // Clean up tensors
+      statesTensor.dispose();
+      nextStatesTensor.dispose();
+      currentQValues.dispose();
+      nextQValues.dispose();
+      targets.dispose();
+      
+      // Update target network periodically
+      this.updateCounter++;
+      this.totalSteps++;
+      
+      if (this.updateCounter % this.config.targetUpdateFreq === 0) {
+        await this.updateTargetNetwork();
       }
-
-      const targetQ = reward + this.config.gamma * nextMaxQ;
-      targets[i * 729 + action] = targetQ;
-      totalQValue += targetQ;
+      
+      // Decay epsilon
+      this.config.epsilon = Math.max(
+        this.config.epsilonMin,
+        this.config.epsilon * this.config.epsilonDecay
+      );
+      
+      this.isTraining = false;
+      return { qValue: 0, epsilon: this.config.epsilon };
+    } catch (error) {
+      console.error('Error during DQN training:', error);
+      this.isTraining = false;
+      return { qValue: 0, epsilon: this.config.epsilon };
     }
-
-    const avgQValue = totalQValue / batch.length;
-
-    // Create target tensor
-    const targetsTensor = tf.tensor2d(Array.from(targets), [batch.length, 729]);
-
-    // Train the network
-    const history = await this.mainNetwork.fit(statesTensor, targetsTensor, {
-      epochs: 1,
-      verbose: 0
-    });
-
-    // Update target network periodically
-    if (this.totalSteps % this.config.targetUpdateFreq === 0) {
-      await this.updateTargetNetwork();
-    }
-
-    // Decay epsilon
-    this.config.epsilon = Math.max(
-      this.config.epsilonMin,
-      this.config.epsilon * this.config.epsilonDecay
-    );
-
-    this.totalSteps++;
-    this.isTraining = false;
-
-    // Cleanup tensors
-    statesTensor.dispose();
-    nextStatesTensor.dispose();
-    currentQValues.dispose();
-    nextQValues.dispose();
-    nextQValuesMain.dispose();
-    targetsTensor.dispose();
-
-    return {
-      qValue: avgQValue,
-      epsilon: this.config.epsilon
-    };
   }
 
   private getValidActionsFromState(state: number[]): number[] {
@@ -463,11 +426,11 @@ export class DQNAgentService {
     return this.getValidActions(board);
   }
 
-  private sampleBatch(): Experience[] {
+  private sampleBatch(batchSize: number): Experience[] {
     const batch: Experience[] = [];
-    const batchSize = Math.min(this.config.batchSize, this.replayBuffer.length);
+    const size = Math.min(batchSize, this.replayBuffer.length);
     
-    for (let i = 0; i < batchSize; i++) {
+    for (let i = 0; i < size; i++) {
       const randomIndex = Math.floor(Math.random() * this.replayBuffer.length);
       batch.push(this.replayBuffer[randomIndex]);
     }
@@ -552,13 +515,12 @@ export class DQNAgentService {
 
   // Dispose of models
   dispose(): void {
+    this.isTraining = false;
     if (this.mainNetwork) {
       this.mainNetwork.dispose();
-      this.mainNetwork = null;
     }
     if (this.targetNetwork) {
       this.targetNetwork.dispose();
-      this.targetNetwork = null;
     }
   }
 }

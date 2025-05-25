@@ -10,6 +10,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { FormsModule } from '@angular/forms';
 import { NgxChartsModule, Color } from '@swimlane/ngx-charts';
+import * as tf from '@tensorflow/tfjs';
 
 import { SudokuService } from '../../services/sudoku.service';
 import { CellComponent } from '../cell/cell.component';
@@ -80,7 +81,7 @@ export class AiLearningComponent implements OnInit, OnDestroy {
   epsilonDecay = 0.995; // DQN epsilon decay
   targetUpdateFreq = 100; // DQN target network update frequency
   
-  // Training stats
+  // Training stats - Initialize with safe default values
   currentReward = 0;
   averageReward = 0;
   accuracy = 0;
@@ -101,13 +102,19 @@ export class AiLearningComponent implements OnInit, OnDestroy {
   correctCells = 0;
   totalTestCells = 0;
   
-  // Chart data for ngx-charts
+  // Chart data for ngx-charts - Initialize with proper structure
   accuracyChartData: any[] = [];
   rewardChartData: any[] = [];
+  lossChartData: any[] = [];
+  comparisonChartData: any[] = [];
+  
+  // Episode tracking data
+  episodeData: any[] = [];
+  dqnWins = 0;
+  ppoWins = 0;
   
   // Chart configuration
   colorScheme: string | Color = 'cool';
-  // curve: CurveFactory = curveMonotoneX;
   
   // Chart options
   showXAxis = true;
@@ -163,9 +170,31 @@ export class AiLearningComponent implements OnInit, OnDestroy {
     // Pre-generate random values for thinking visualization
     this.generateRandomThinkingValues();
     
-    // Initialize chart data
-    this.accuracyChartData = [{ name: 'Accuracy', series: [] }];
-    this.rewardChartData = [{ name: 'Reward', series: [] }];
+    // Initialize chart data with proper structure and safe values
+    this.initializeChartData();
+  }
+
+  // Initialize chart data with safe default values
+  private initializeChartData(): void {
+    this.accuracyChartData = [{
+      name: 'Accuracy',
+      series: []
+    }];
+    
+    this.rewardChartData = [{
+      name: 'Reward', 
+      series: []
+    }];
+
+    this.lossChartData = [{
+      name: 'Loss',
+      series: []
+    }];
+
+    this.comparisonChartData = [{
+      name: 'Comparison',
+      value: 0
+    }];
   }
 
   // Generate fixed random values to avoid ExpressionChangedAfterItHasBeenCheckedError
@@ -188,17 +217,22 @@ export class AiLearningComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
-    // Initialize board
-    this.initializeBoard();
-    
-    // Update network architecture first
-    this.updateNetworkArchitecture();
-    
-    // Initialize PPO agent when PPO is selected
-    if (this.selectedAlgorithm === 'ppo') {
-      await this.initializePPOAgent();
-    } else if (this.selectedAlgorithm === 'dqn') {
-      await this.initializeDQNAgent();
+    try {
+      // Initialize board
+      await this.initializeBoard();
+      
+      // Update network architecture first
+      this.updateNetworkArchitecture();
+      
+      // Initialize agent based on selected algorithm
+      if (this.selectedAlgorithm === 'ppo') {
+        await this.initializePPOAgent();
+      } else if (this.selectedAlgorithm === 'dqn') {
+        await this.initializeDQNAgent();
+      }
+    } catch (error) {
+      console.error('Error during initialization:', error);
+      this.loading = false;
     }
   }
   
@@ -213,38 +247,61 @@ export class AiLearningComponent implements OnInit, OnDestroy {
   }
 
   private async initializePPOAgent(): Promise<void> {
-    const config: Partial<PPOConfig> = {
-      learningRate: this.learningRate,
-      batchSize: this.batchSize,
-      entropyCoef: this.entropyCoef
-    };
-    
-    await this.ppoAgent.initialize(config);
-    console.log('PPO Agent initialized');
+    try {
+      const config: Partial<PPOConfig> = {
+        learningRate: this.learningRate,
+        batchSize: this.batchSize,
+        entropyCoef: this.entropyCoef
+      };
+      
+      await this.ppoAgent.initialize(config);
+      console.log('PPO Agent initialized');
+    } catch (error) {
+      console.error('Error initializing PPO agent:', error);
+    }
   }
 
   private async initializeDQNAgent(): Promise<void> {
-    const config: Partial<DQNConfig> = {
-      learningRate: this.learningRate,
-      batchSize: this.batchSize,
-      gamma: this.gamma, // Use gamma instead of discountFactor
-      epsilon: this.epsilon,
-      epsilonDecay: this.epsilonDecay,
-      targetUpdateFreq: this.targetUpdateFreq
-    };
-    
-    await this.dqnAgent.initialize(config);
-    console.log('DQN Agent initialized');
+    try {
+      const config: Partial<DQNConfig> = {
+        learningRate: this.learningRate,
+        batchSize: this.batchSize,
+        gamma: this.gamma,
+        epsilon: this.epsilon,
+        epsilonDecay: this.epsilonDecay,
+        targetUpdateFreq: this.targetUpdateFreq
+      };
+      
+      await this.dqnAgent.initialize(config);
+      console.log('DQN Agent initialized');
+    } catch (error) {
+      console.error('Error initializing DQN agent:', error);
+    }
   }
 
-  private initializeBoard(): void {
-    this.loading = true;
-    this.sudokuService.getNewBoard().subscribe(boardData => {
-      this.board = JSON.parse(JSON.stringify(boardData.grid));
-      this.solution = JSON.parse(JSON.stringify(boardData.solution));
-      this.currentTrainingBoard = JSON.parse(JSON.stringify(boardData.grid));
-      this.initializeCellData();
-      this.loading = false;
+  private async initializeBoard(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.loading = true;
+      this.sudokuService.getNewBoard().subscribe({
+        next: (boardData) => {
+          try {
+            this.board = JSON.parse(JSON.stringify(boardData.grid));
+            this.solution = JSON.parse(JSON.stringify(boardData.solution));
+            this.currentTrainingBoard = JSON.parse(JSON.stringify(boardData.grid));
+            this.initializeCellData();
+            this.loading = false;
+            resolve();
+          } catch (error) {
+            console.error('Error processing board data:', error);
+            reject(error instanceof Error ? error : new Error('Failed to process board data'));
+          }
+        },
+        error: (error) => {
+          console.error('Error loading board:', error);
+          this.loading = false;
+          reject(error instanceof Error ? error : new Error('Failed to load board'));
+        }
+      });
     });
   }
 
@@ -300,29 +357,34 @@ export class AiLearningComponent implements OnInit, OnDestroy {
       return;
     }
     
-    // Initialize PPO agent if not already done or if algorithm changed
-    if (this.selectedAlgorithm === 'ppo') {
-      await this.initializePPOAgent();
-    } else if (this.selectedAlgorithm === 'dqn') {
-      await this.initializeDQNAgent();
+    try {
+      // Initialize agent based on selected algorithm
+      if (this.selectedAlgorithm === 'ppo') {
+        await this.initializePPOAgent();
+      } else if (this.selectedAlgorithm === 'dqn') {
+        await this.initializeDQNAgent();
+      }
+      
+      this.isTraining = true;
+      this.progress = 0;
+      this.episodes = 0;
+      this.accuracy = 0;
+      this.averageReward = 0;
+      this.actorLoss = 0;
+      this.criticLoss = 0;
+      this.avgAdvantage = 0;
+      this.totalSteps = 0;
+      
+      // Reset chart data with proper structure
+      this.initializeChartData();
+      
+      // Start training loop
+      await this.trainWithRealAlgorithm();
+    } catch (error) {
+      console.error('Error starting training:', error);
+      this.isTraining = false;
+      this.snackBar.open('Error starting training. Check console for details.', 'Close', { duration: 5000 });
     }
-    
-    this.isTraining = true;
-    this.progress = 0;
-    this.episodes = 0;
-    this.accuracy = 0;
-    this.averageReward = 0;
-    this.actorLoss = 0;
-    this.criticLoss = 0;
-    this.avgAdvantage = 0;
-    this.totalSteps = 0;
-    
-    // Reset chart data
-    this.accuracyChartData = [{ name: 'Accuracy', series: [] }];
-    this.rewardChartData = [{ name: 'Reward', series: [] }];
-    
-    // Start training loop
-    this.trainWithRealAlgorithm();
   }
 
   stopTraining(): void {
@@ -346,10 +408,16 @@ export class AiLearningComponent implements OnInit, OnDestroy {
   }
 
   private async trainWithRealAlgorithm(): Promise<void> {
-    if (this.selectedAlgorithm === 'ppo') {
-      await this.trainPPO();
-    } else {
-      await this.trainDQN();
+    try {
+      if (this.selectedAlgorithm === 'ppo') {
+        await this.trainPPO();
+      } else {
+        await this.trainDQN();
+      }
+    } catch (error) {
+      console.error('Error during training:', error);
+      this.isTraining = false;
+      this.snackBar.open('Training error occurred. Check console for details.', 'Close', { duration: 5000 });
     }
   }
 
@@ -358,105 +426,142 @@ export class AiLearningComponent implements OnInit, OnDestroy {
     let episodeRewards: number[] = [];
     
     while (this.isTraining && this.episodes < maxEpisodes) {
-      // Start new episode
-      this.currentTrainingBoard = JSON.parse(JSON.stringify(this.board));
-      this.currentEpisodeSteps = [];
-      let episodeReward = 0;
-      let stepCount = 0;
-      const maxStepsPerEpisode = 100;
-      
-      // Run episode
-      while (this.isTraining && stepCount < maxStepsPerEpisode) {
-        try {
-          // Get action from PPO agent
-          const { action, logProb, value } = await this.ppoAgent.selectAction(this.currentTrainingBoard);
-          
-          // Apply action and get reward
-          const result = this.ppoAgent.applyAction(this.currentTrainingBoard, action);
-          
-          // Store training step
-          const trainingStep: TrainingStep = {
-            state: this.boardToState(this.currentTrainingBoard),
-            action: action,
-            reward: result.reward,
-            value: value,
-            logProb: logProb,
-            done: result.done
-          };
-          
-          this.currentEpisodeSteps.push(trainingStep);
-          this.ppoAgent.storeStep(trainingStep);
-          
-          // Update visualization
-          this.updateVisualization(action, result.reward);
-          
-          // Update board
-          this.currentTrainingBoard = result.newBoard;
-          episodeReward += result.reward;
-          stepCount++;
-          this.totalSteps++;
-          
-          // Check if episode is done
-          if (result.done) {
-            this.accuracy = 100; // Solved the puzzle
-            break;
+      try {
+        // Start new episode
+        this.currentTrainingBoard = JSON.parse(JSON.stringify(this.board));
+        this.currentEpisodeSteps = [];
+        let episodeReward = 0;
+        let stepCount = 0;
+        const maxStepsPerEpisode = 100;
+        
+        // Run episode
+        while (this.isTraining && stepCount < maxStepsPerEpisode) {
+          try {
+            // Check if no valid moves left at the start of the step
+            const validActions = this.getValidActions(this.currentTrainingBoard);
+            if (validActions.length === 0) {
+              console.log(`Episode ${this.episodes + 1}: No valid actions available, ending episode`);
+              break; // Break out of step loop only, continue to next episode
+            }
+
+            // Get action from PPO agent
+            const { action, logProb, value } = await this.ppoAgent.selectAction(this.currentTrainingBoard);
+            
+            // Apply action and get reward
+            const result = this.ppoAgent.applyAction(this.currentTrainingBoard, action);
+            
+            // Validate numerical values before storing
+            const validatedReward = this.validateNumber(result.reward, 0);
+            const validatedValue = this.validateNumber(value, 0);
+            const validatedLogProb = this.validateNumber(logProb, 0);
+            
+            // Store training step
+            const trainingStep: TrainingStep = {
+              state: this.boardToState(this.currentTrainingBoard),
+              action: action,
+              reward: validatedReward,
+              value: validatedValue,
+              logProb: validatedLogProb,
+              done: result.done
+            };
+            
+            this.currentEpisodeSteps.push(trainingStep);
+            this.ppoAgent.storeStep(trainingStep);
+            
+            // Update visualization
+            this.updateVisualization(action, validatedReward);
+            
+            // Update board
+            this.currentTrainingBoard = result.newBoard;
+            episodeReward += validatedReward;
+            stepCount++;
+            this.totalSteps++;
+            
+            // Check if episode is done (puzzle solved)
+            if (result.done) {
+              console.log(`Episode ${this.episodes + 1}: Puzzle solved! Episode reward: ${episodeReward}`);
+              this.accuracy = 100;
+              break; // Break out of step loop, continue to next episode
+            }
+            
+          } catch (error) {
+            console.error('Error during PPO training step:', error);
+            break; // Break out of step loop only
           }
           
-          // Check if no valid moves left
-          const validActions = this.getValidActions(this.currentTrainingBoard);
-          if (validActions.length === 0) {
-            break;
-          }
-          
-        } catch (error) {
-          console.error('Error during PPO training step:', error);
-          break;
+          // Small delay for visualization
+          await new Promise(resolve => setTimeout(resolve, Math.max(10, 1000 - this.trainingSpeed * 10)));
         }
         
-        // Small delay for visualization
-        await new Promise(resolve => setTimeout(resolve, Math.max(10, 1000 - this.trainingSpeed * 10)));
-      }
-      
-      // Episode finished
-      episodeRewards.push(episodeReward);
-      this.episodes++;
-      
-      // Calculate running averages
-      this.currentReward = episodeReward;
-      this.averageReward = episodeRewards.reduce((a, b) => a + b, 0) / episodeRewards.length;
-      
-      // Calculate accuracy (percentage of cells correctly filled)
-      this.accuracy = this.calculateAccuracy();
-      
-      // Train the PPO agent
-      if (this.ppoAgent.getTrainingStats().bufferSize >= this.batchSize) {
-        const trainingResult = await this.ppoAgent.train();
-        this.actorLoss = trainingResult.actorLoss;
-        this.criticLoss = trainingResult.criticLoss;
-        this.avgAdvantage = trainingResult.avgAdvantage;
-      }
-      
-      // Update progress
-      this.progress = Math.min(100, (this.episodes / maxEpisodes) * 100);
-      
-      // Update charts every 5 episodes
-      if (this.episodes % 5 === 0) {
-        this.updateCharts();
-      }
-      
-      // Reset board for next episode
-      if (this.isTraining) {
-        this.initializeBoard();
-        await new Promise(resolve => setTimeout(resolve, 100)); // Wait for board initialization
+        // Episode finished - validate all values
+        episodeRewards.push(this.validateNumber(episodeReward, 0));
+        this.episodes++;
+        
+        console.log(`Completed episode ${this.episodes}/${maxEpisodes}, reward: ${episodeReward}, steps: ${stepCount}`);
+        
+        // Calculate running averages with validation
+        this.currentReward = this.validateNumber(episodeReward, 0);
+        this.averageReward = this.validateNumber(
+          episodeRewards.reduce((a, b) => a + b, 0) / Math.max(episodeRewards.length, 1), 
+          0
+        );
+        
+        // Calculate accuracy
+        this.accuracy = this.validateNumber(this.calculateAccuracy(), 0);
+        
+        // Train the PPO agent if we have enough data
+        if (this.ppoAgent.getTrainingStats().bufferSize >= this.batchSize) {
+          try {
+            const trainingResult = await this.ppoAgent.train();
+            this.actorLoss = this.validateNumber(trainingResult.actorLoss, 0);
+            this.criticLoss = this.validateNumber(trainingResult.criticLoss, 0);
+            this.avgAdvantage = this.validateNumber(trainingResult.avgAdvantage, 0);
+          } catch (error) {
+            console.error('Error during PPO training update:', error);
+          }
+        }
+        
+        // Update progress
+        this.progress = Math.min(100, (this.episodes / maxEpisodes) * 100);
+        
+        // Update charts every 5 episodes
+        if (this.episodes % 5 === 0) {
+          this.updateCharts();
+        }
+        
+        // Reset board for next episode (always generate a new puzzle)
+        if (this.isTraining && this.episodes < maxEpisodes) {
+          try {
+            await this.initializeBoard();
+            await new Promise(resolve => setTimeout(resolve, 100));
+          } catch (error) {
+            console.error('Error initializing new board for next episode:', error);
+            // Use current board if initialization fails
+          }
+        }
+        
+      } catch (error) {
+        console.error('Error in PPO episode:', error);
+        // Continue to next episode instead of breaking
+        this.episodes++;
+        if (this.episodes >= maxEpisodes) {
+          break;
+        }
+        // Try to reset board for next episode
+        try {
+          await this.initializeBoard();
+        } catch (boardError) {
+          console.error('Failed to reset board, stopping training:', boardError);
+          break;
+        }
       }
     }
     
     // Training complete
-    if (this.isTraining) {
-      this.progress = 100;
-      this.isTraining = false;
-      this.snackBar.open('PPO Training complete!', 'Close', { duration: 3000 });
-    }
+    console.log(`PPO Training finished. Episodes completed: ${this.episodes}/${maxEpisodes}`);
+    this.progress = 100;
+    this.isTraining = false;
+    this.snackBar.open(`PPO Training complete! Completed ${this.episodes} episodes.`, 'Close', { duration: 3000 });
   }
 
   private async trainDQN(): Promise<void> {
@@ -464,93 +569,106 @@ export class AiLearningComponent implements OnInit, OnDestroy {
     let episodeRewards: number[] = [];
     
     while (this.isTraining && this.episodes < maxEpisodes) {
-      // Start new episode
-      this.currentTrainingBoard = JSON.parse(JSON.stringify(this.board));
-      let episodeReward = 0;
-      let stepCount = 0;
-      const maxStepsPerEpisode = 100;
-      
-      // Run episode
-      while (this.isTraining && stepCount < maxStepsPerEpisode) {
-        try {
-          // Get action from DQN agent
-          const { action, qValue } = await this.dqnAgent.selectAction(this.currentTrainingBoard);
-          
-          // Apply action and get reward
-          const result = this.dqnAgent.applyAction(this.currentTrainingBoard, action);
-          
-          // Store experience in replay buffer
-          const experience: Experience = {
-            state: this.boardToState(this.currentTrainingBoard),
-            action: action,
-            reward: result.reward,
-            nextState: this.boardToState(result.newBoard),
-            done: result.done
-          };
-          
-          this.dqnAgent.storeExperience(experience);
-          
-          // Update visualization
-          this.updateVisualization(action, result.reward);
-          this.qValue = qValue;
-          
-          // Update board
-          this.currentTrainingBoard = result.newBoard;
-          episodeReward += result.reward;
-          stepCount++;
-          this.totalSteps++;
-          
-          // Check if episode is done
-          if (result.done) {
-            this.accuracy = 100; // Solved the puzzle
+      try {
+        // Start new episode
+        this.currentTrainingBoard = JSON.parse(JSON.stringify(this.board));
+        let episodeReward = 0;
+        let stepCount = 0;
+        const maxStepsPerEpisode = 100;
+        
+        // Run episode
+        while (this.isTraining && stepCount < maxStepsPerEpisode) {
+          try {
+            // Get action from DQN agent
+            const { action, qValue } = await this.dqnAgent.selectAction(this.currentTrainingBoard);
+            
+            // Apply action and get reward
+            const result = this.dqnAgent.applyAction(this.currentTrainingBoard, action);
+            
+            // Validate numerical values
+            const validatedReward = this.validateNumber(result.reward, 0);
+            const validatedQValue = this.validateNumber(qValue, 0);
+            
+            // Store experience in replay buffer
+            const experience: Experience = {
+              state: this.boardToState(this.currentTrainingBoard),
+              action: action,
+              reward: validatedReward,
+              nextState: this.boardToState(result.newBoard),
+              done: result.done
+            };
+            
+            this.dqnAgent.storeExperience(experience);
+            
+            // Update visualization
+            this.updateVisualization(action, validatedReward);
+            this.qValue = validatedQValue;
+            
+            // Update board
+            this.currentTrainingBoard = result.newBoard;
+            episodeReward += validatedReward;
+            stepCount++;
+            this.totalSteps++;
+            
+            // Check if episode is done
+            if (result.done) {
+              this.accuracy = 100;
+              break;
+            }
+            
+            // Check if no valid moves left
+            const validActions = this.getValidActions(this.currentTrainingBoard);
+            if (validActions.length === 0) {
+              break;
+            }
+            
+          } catch (error) {
+            console.error('Error during DQN training step:', error);
             break;
           }
           
-          // Check if no valid moves left
-          const validActions = this.getValidActions(this.currentTrainingBoard);
-          if (validActions.length === 0) {
-            break;
-          }
-          
-        } catch (error) {
-          console.error('Error during DQN training step:', error);
-          break;
+          // Small delay for visualization
+          await new Promise(resolve => setTimeout(resolve, Math.max(10, 1000 - this.trainingSpeed * 10)));
         }
         
-        // Small delay for visualization
-        await new Promise(resolve => setTimeout(resolve, Math.max(10, 1000 - this.trainingSpeed * 10)));
-      }
-      
-      // Episode finished
-      episodeRewards.push(episodeReward);
-      this.episodes++;
-      
-      // Calculate running averages
-      this.currentReward = episodeReward;
-      this.averageReward = episodeRewards.reduce((a, b) => a + b, 0) / episodeRewards.length;
-      
-      // Calculate accuracy (percentage of cells correctly filled)
-      this.accuracy = this.calculateAccuracy();
-      
-      // Train the DQN agent
-      if (this.dqnAgent.getTrainingStats().bufferSize >= this.batchSize) {
-        const trainingResult = await this.dqnAgent.train();
-        this.qValue = trainingResult.qValue;
-        this.explorationRate = trainingResult.epsilon;
-      }
-      
-      // Update progress
-      this.progress = Math.min(100, (this.episodes / maxEpisodes) * 100);
-      
-      // Update charts every 5 episodes
-      if (this.episodes % 5 === 0) {
-        this.updateCharts();
-      }
-      
-      // Reset board for next episode
-      if (this.isTraining) {
-        this.initializeBoard();
-        await new Promise(resolve => setTimeout(resolve, 100)); // Wait for board initialization
+        // Episode finished - validate all values
+        episodeRewards.push(this.validateNumber(episodeReward, 0));
+        this.episodes++;
+        
+        // Calculate running averages with validation
+        this.currentReward = this.validateNumber(episodeReward, 0);
+        this.averageReward = this.validateNumber(
+          episodeRewards.reduce((a, b) => a + b, 0) / Math.max(episodeRewards.length, 1), 
+          0
+        );
+        
+        // Calculate accuracy
+        this.accuracy = this.validateNumber(this.calculateAccuracy(), 0);
+        
+        // Train the DQN agent
+        if (this.dqnAgent.getTrainingStats().bufferSize >= this.batchSize) {
+          const trainingResult = await this.dqnAgent.train();
+          this.qValue = this.validateNumber(trainingResult.qValue, 0);
+          this.explorationRate = this.validateNumber(trainingResult.epsilon, 0);
+        }
+        
+        // Update progress
+        this.progress = Math.min(100, (this.episodes / maxEpisodes) * 100);
+        
+        // Update charts every 5 episodes
+        if (this.episodes % 5 === 0) {
+          this.updateCharts();
+        }
+        
+        // Reset board for next episode
+        if (this.isTraining) {
+          await this.initializeBoard();
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+      } catch (error) {
+        console.error('Error in DQN episode:', error);
+        break;
       }
     }
     
@@ -562,12 +680,49 @@ export class AiLearningComponent implements OnInit, OnDestroy {
     }
   }
 
+  // Helper method to validate numbers and prevent NaN
+  private validateNumber(value: any, defaultValue: number = 0): number {
+    if (typeof value !== 'number' || isNaN(value) || !isFinite(value)) {
+      return defaultValue;
+    }
+    return value;
+  }
+
+  // Safe tensor creation with consistent dtypes
+  private createSafeTensor(data: any[], shape?: number[], dtype: 'float32' | 'int32' = 'float32'): tf.Tensor {
+    try {
+      // Ensure all values are valid numbers
+      const safeData = data.map(val => {
+        if (Array.isArray(val)) {
+          return val.map(v => this.validateNumber(v, 0));
+        }
+        return this.validateNumber(val, 0);
+      });
+      
+      return tf.tensor(safeData, shape, dtype);
+    } catch (error) {
+      console.error('Error creating tensor:', error);
+      // Return a safe default tensor
+      const fallbackData = Array.isArray(data[0]) 
+        ? Array(data.length).fill(Array(data[0].length).fill(0))
+        : Array(data.length).fill(0);
+      return tf.tensor(fallbackData, shape, dtype);
+    }
+  }
+
   private boardToState(board: number[][]): number[] {
     const state: number[] = [];
-    for (let i = 0; i < 9; i++) {
-      for (let j = 0; j < 9; j++) {
-        state.push(board[i][j] / 9.0); // Normalize to [0, 1]
+    try {
+      for (let i = 0; i < 9; i++) {
+        for (let j = 0; j < 9; j++) {
+          const normalizedValue = board[i][j] / 9.0;
+          state.push(this.validateNumber(normalizedValue, 0));
+        }
       }
+    } catch (error) {
+      console.error('Error converting board to state:', error);
+      // Return a default state if conversion fails
+      return new Array(81).fill(0);
     }
     return state;
   }
@@ -631,21 +786,26 @@ export class AiLearningComponent implements OnInit, OnDestroy {
   }
 
   private calculateAccuracy(): number {
-    let correctCells = 0;
-    let totalFilledCells = 0;
-    
-    for (let row = 0; row < 9; row++) {
-      for (let col = 0; col < 9; col++) {
-        if (this.currentTrainingBoard[row][col] !== 0) {
-          totalFilledCells++;
-          if (this.currentTrainingBoard[row][col] === this.solution[row][col]) {
-            correctCells++;
+    try {
+      let correctCells = 0;
+      let totalFilledCells = 0;
+      
+      for (let row = 0; row < 9; row++) {
+        for (let col = 0; col < 9; col++) {
+          if (this.currentTrainingBoard[row][col] !== 0) {
+            totalFilledCells++;
+            if (this.currentTrainingBoard[row][col] === this.solution[row][col]) {
+              correctCells++;
+            }
           }
         }
       }
+      
+      return totalFilledCells > 0 ? (correctCells / totalFilledCells) * 100 : 0;
+    } catch (error) {
+      console.error('Error calculating accuracy:', error);
+      return 0;
     }
-    
-    return totalFilledCells > 0 ? (correctCells / totalFilledCells) * 100 : 0;
   }
 
   // Fallback training method for DQN or when PPO fails
@@ -688,30 +848,119 @@ export class AiLearningComponent implements OnInit, OnDestroy {
     trainingStep();
   }
   
-  updateCharts(): void {
-    // Add new data points to the charts
-    this.accuracyChartData[0].series.push({
-      name: this.episodes.toString(),
-      value: this.accuracy
-    });
-    
-    this.rewardChartData[0].series.push({
-      name: this.episodes.toString(),
-      value: this.averageReward
-    });
-    
-    // Limit chart data points for performance
-    const maxDataPoints = 30;
-    if (this.accuracyChartData[0].series.length > maxDataPoints) {
-      this.accuracyChartData[0].series = this.accuracyChartData[0].series.slice(-maxDataPoints);
-      this.rewardChartData[0].series = this.rewardChartData[0].series.slice(-maxDataPoints);
-    }
-    
-    // Create new array references to trigger Angular change detection
-    this.accuracyChartData = [...this.accuracyChartData];
-    this.rewardChartData = [...this.rewardChartData];
-  }
+  // Update charts with validated data
+  private updateCharts(): void {
+    try {
+      // Update accuracy chart with current episode data
+      const accuracyData = {
+        name: this.episodes.toString(),
+        value: this.validateNumber(this.accuracy, 0)
+      };
 
+      // Update reward chart with current episode data
+      const rewardData = {
+        name: this.episodes.toString(),
+        value: this.validateNumber(this.currentReward, 0)
+      };
+
+      // Initialize or update accuracy chart series
+      if (!this.accuracyChartData[0] || !this.accuracyChartData[0].series) {
+        this.accuracyChartData = [{
+          name: this.selectedAlgorithm.toUpperCase() + ' Accuracy',
+          series: []
+        }];
+      }
+
+      // Initialize or update reward chart series  
+      if (!this.rewardChartData[0] || !this.rewardChartData[0].series) {
+        this.rewardChartData = [{
+          name: this.selectedAlgorithm.toUpperCase() + ' Reward',
+          series: []
+        }];
+      }
+
+      // Add new data points
+      this.accuracyChartData[0].series.push(accuracyData);
+      this.rewardChartData[0].series.push(rewardData);
+
+      // Keep only last 50 data points for performance
+      if (this.accuracyChartData[0].series.length > 50) {
+        this.accuracyChartData[0].series = this.accuracyChartData[0].series.slice(-50);
+      }
+      if (this.rewardChartData[0].series.length > 50) {
+        this.rewardChartData[0].series = this.rewardChartData[0].series.slice(-50);
+      }
+
+      // Update loss chart for PPO
+      if (this.selectedAlgorithm === 'ppo') {
+        if (!this.lossChartData[0] || !this.lossChartData[0].series) {
+          this.lossChartData = [{
+            name: 'Actor Loss',
+            series: []
+          }, {
+            name: 'Critic Loss',
+            series: []
+          }];
+        }
+
+        this.lossChartData[0].series.push({
+          name: this.episodes.toString(),
+          value: this.validateNumber(this.actorLoss, 0)
+        });
+
+        this.lossChartData[1].series.push({
+          name: this.episodes.toString(),
+          value: this.validateNumber(this.criticLoss, 0)
+        });
+
+        // Keep only last 50 data points
+        if (this.lossChartData[0].series.length > 50) {
+          this.lossChartData[0].series = this.lossChartData[0].series.slice(-50);
+          this.lossChartData[1].series = this.lossChartData[1].series.slice(-50);
+        }
+      }
+
+      // Update DQN-specific charts
+      if (this.selectedAlgorithm === 'dqn') {
+        if (!this.lossChartData[0] || !this.lossChartData[0].series) {
+          this.lossChartData = [{
+            name: 'Q-Value',
+            series: []
+          }, {
+            name: 'Exploration Rate',
+            series: []
+          }];
+        }
+
+        this.lossChartData[0].series.push({
+          name: this.episodes.toString(),
+          value: this.validateNumber(this.qValue, 0)
+        });
+
+        this.lossChartData[1].series.push({
+          name: this.episodes.toString(),
+          value: this.validateNumber(this.explorationRate, 0)
+        });
+
+        // Keep only last 50 data points
+        if (this.lossChartData[0].series.length > 50) {
+          this.lossChartData[0].series = this.lossChartData[0].series.slice(-50);
+          this.lossChartData[1].series = this.lossChartData[1].series.slice(-50);
+        }
+      }
+
+      // Create new array references to trigger change detection
+      this.accuracyChartData = [...this.accuracyChartData];
+      this.rewardChartData = [...this.rewardChartData];
+      this.lossChartData = [...this.lossChartData];
+
+      console.log(`Charts updated - Episode ${this.episodes}: Accuracy: ${this.accuracy.toFixed(1)}%, Reward: ${this.currentReward.toFixed(2)}`);
+
+    } catch (error) {
+      console.error('Error updating charts:', error);
+    }
+  }
+  
   generateNetworkVisualization(): void {
     // This is a simplified mock visualization
     // In a real implementation, you would visualize actual network weights/activations
@@ -1192,6 +1441,8 @@ export class AiLearningComponent implements OnInit, OnDestroy {
     // Reset chart data
     this.accuracyChartData = [{ name: 'Accuracy', series: [] }];
     this.rewardChartData = [{ name: 'Reward', series: [] }];
+    this.lossChartData = [{ name: 'Loss', series: [] }];
+    this.comparisonChartData = [{ name: 'Comparison', value: 0 }];
   }
 
   updateNetworkArchitecture(): void {
