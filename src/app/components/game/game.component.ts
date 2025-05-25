@@ -48,6 +48,10 @@ export class GameComponent implements OnInit, OnDestroy {
   notesRequired: boolean = false;
   singleCellHintRequested: boolean = false;
   targetCellForHint: { row: number, col: number } | null = null;
+  
+  // Skip functionality properties
+  skippedTechniqueTypes: SudokuTechnique[] = [];
+  skipToEnd: boolean = false;
 
   constructor(
     private readonly router: Router, 
@@ -425,7 +429,36 @@ export class GameComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const technique = this.pendingTechniques[this.currentTeachingIndex];
+    // Skip techniques that the user has chosen to skip
+    let technique = this.pendingTechniques[this.currentTeachingIndex];
+    
+    // If we should skip to the end, don't show any more techniques
+    if (this.skipToEnd) {
+      // Show a message that we're skipping to the end
+      this._snackBar.open('Skipping all remaining techniques.', 'Close', {
+        duration: 3000
+      });
+      this.currentTeachingIndex = this.pendingTechniques.length;
+      this.highlightedCells = [];
+      this.activeDetection = null;
+      return;
+    }
+    
+    // Skip techniques of types the user has chosen to skip
+    while (this.skippedTechniqueTypes.includes(technique.technique)) {
+      this.currentTeachingIndex++;
+      if (this.currentTeachingIndex >= this.pendingTechniques.length) {
+        // No more techniques to show
+        this._snackBar.open('No more applicable techniques to show.', 'Close', {
+          duration: 3000
+        });
+        this.highlightedCells = [];
+        this.activeDetection = null;
+        return;
+      }
+      technique = this.pendingTechniques[this.currentTeachingIndex];
+    }
+    
     this.activeDetection = technique;
     this.teachingStep = 'identify';
 
@@ -451,20 +484,147 @@ export class GameComponent implements OnInit, OnDestroy {
                  <p>Do you want to apply this technique to solve this cell?</p>`,
         technique: technique.technique,
         position: technique.targetCell,
-        value: technique.value
+        value: technique.value,
+        showSkipOptions: true,
+        isTeachingMode: true,
+        techniqueCount: this.pendingTechniques.length,
+        currentIndex: this.currentTeachingIndex
       },
-      width: '400px'
+      width: '400px',
+      panelClass: 'technique-dialog',
+      hasBackdrop: false,
+      autoFocus: false
     });
 
     dialogRef.afterClosed().subscribe(result => {
       if (result === 'apply') {
+        // Apply technique and move to the next one
         this.applyTechniqueAndContinue();
+      } else if (result === 'skip-this') {
+        // Skip just this instance and move to next technique
+        this.skipCurrentTechnique();
+      } else if (result === 'skip-apply') {
+        // Apply the current technique and skip to the next one
+        this.applyAndSkipToNext();
+      } else if (result === 'skip-type') {
+        // Skip all techniques of this type
+        this.skipTechniqueType(technique.technique);
+      } else if (result === 'skip-all') {
+        // Skip to the end
+        this.skipToEnd = true;
+        this.highlightedCells = [];
+        this.activeDetection = null;
       } else {
         // If user cancels, remain in coach mode but don't proceed
         this.highlightedCells = [];
         this.activeDetection = null;
       }
     });
+  }
+
+  // Apply the current technique and immediately skip to the next one
+  applyAndSkipToNext(): void {
+    if (!this.activeDetection || !this.activeDetection.targetCell || !this.activeDetection.value) {
+      return;
+    }
+
+    const { row, col } = this.activeDetection.targetCell;
+    const value = this.activeDetection.value;
+
+    // Apply the technique (set the value in the board)
+    this.board[row][col] = value;
+    this.notes[row][col] = [];
+
+    // Record technique usage
+    this.techniqueCoachService.recordTechniqueUsage(this.activeDetection.technique, true);
+
+    // Eliminate this number from related cells' notes
+    this.eliminateNotesFromRelatedCells(row, col, value);
+
+    // Check if the game is completed
+    if (this.sudokuService.isSolved(this.board)) {
+      this.gameCompleted = true;
+      this.stopTimer();
+      this.coachMode = false;
+      return;
+    }
+
+    // Clear highlights and proceed to the next technique without delay
+    this.highlightedCells = [];
+    this.activeDetection = null;
+    this.currentTeachingIndex++;
+
+    if (this.currentTeachingIndex < this.pendingTechniques.length) {
+      // Show the next technique immediately
+      setTimeout(() => this.teachTechnique(), 100);
+    } else {
+      // No more techniques to teach at the moment
+      this._snackBar.open(
+        'You\'ve applied all available techniques! Try using Auto Notes again to find more.',
+        'Continue',
+        { duration: 6000 }
+      ).onAction().subscribe(() => {
+        this.autoFillAllNotes();
+        this.startTeachingMode();
+      });
+    }
+  }
+
+  // Skip the current technique and move to the next one
+  skipCurrentTechnique(): void {
+    this.highlightedCells = [];
+    this.activeDetection = null;
+    this.currentTeachingIndex++;
+    
+    if (this.currentTeachingIndex < this.pendingTechniques.length) {
+      // Show the next technique
+      setTimeout(() => this.teachTechnique(), 100);
+    } else {
+      // No more techniques to teach
+      this._snackBar.open(
+        'You\'ve reviewed all available techniques!',
+        'OK',
+        { duration: 3000 }
+      );
+    }
+  }
+
+  // Skip all techniques of the specified type
+  skipTechniqueType(techniqueType: SudokuTechnique): void {
+    // Add this technique type to the list of skipped types
+    if (!this.skippedTechniqueTypes.includes(techniqueType)) {
+      this.skippedTechniqueTypes.push(techniqueType);
+    }
+    
+    this.highlightedCells = [];
+    this.activeDetection = null;
+    
+    // Find the next technique that isn't of the skipped type
+    let foundNext = false;
+    while (this.currentTeachingIndex < this.pendingTechniques.length) {
+      this.currentTeachingIndex++;
+      if (this.currentTeachingIndex >= this.pendingTechniques.length) {
+        break;
+      }
+      
+      const nextTechnique = this.pendingTechniques[this.currentTeachingIndex];
+      if (!this.skippedTechniqueTypes.includes(nextTechnique.technique)) {
+        foundNext = true;
+        break;
+      }
+    }
+    
+    if (foundNext && this.currentTeachingIndex < this.pendingTechniques.length) {
+      // Show the next non-skipped technique
+      setTimeout(() => this.teachTechnique(), 100);
+    } else {
+      // No more non-skipped techniques to teach
+      this._snackBar.open(
+        'No more applicable techniques to show after skipping.',
+        'OK',
+        { duration: 3000 }
+      );
+    }
   }
 
   // Apply the current technique and continue to the next one
