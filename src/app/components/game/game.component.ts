@@ -5,14 +5,16 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { CellComponent } from '../cell/cell.component';
 import { SudokuService, SudokuBoard } from '../../services/sudoku.service';
 import { LocalSudokuGeneratorService } from '../../services/local-sudoku-generator.service';
+import { TechniqueCoachService, TechniqueDetection, SudokuTechnique } from '../../services/technique-coach.service';
 
 @Component({
   selector: 'app-game',
   standalone: true,
-  imports: [CommonModule, MatButtonModule, MatIconModule, MatTooltipModule, MatSnackBarModule, CellComponent],
+  imports: [CommonModule, MatButtonModule, MatIconModule, MatTooltipModule, MatSnackBarModule, MatDialogModule, CellComponent],
   templateUrl: './game.component.html',
   styleUrl: './game.component.css'
 })
@@ -35,11 +37,17 @@ export class GameComponent implements OnInit, OnDestroy {
   // Make Math available in template
   Math = Math;
 
+  // Properties for technique coaching
+  highlightedCells: { row: number, col: number }[] = [];
+  activeDetection: TechniqueDetection | null = null;
+  coachMode: boolean = false;
+
   constructor(
     private readonly router: Router, 
     private readonly sudokuService: SudokuService,
     private readonly localGenerator: LocalSudokuGeneratorService,
-    private _snackBar: MatSnackBar
+    private _snackBar: MatSnackBar,
+    private techniqueCoachService: TechniqueCoachService
   ) {
     // Initialize notes array
     this.initializeNotes();
@@ -329,50 +337,98 @@ export class GameComponent implements OnInit, OnDestroy {
     this.notesMode = !this.notesMode;
   }
 
-  getHint(): void {
-    if (this.hintsUsed >= this.maxHints || !this.selectedCell) {
-      console.log('No more hints available!');
-      return;
+  // Toggle "Teach Me" coach mode
+  toggleCoachMode(): void {
+    this.coachMode = !this.coachMode;
+    if (!this.coachMode) {
+      // Clear any highlights when exiting coach mode
+      this.highlightedCells = [];
+      this.activeDetection = null;
+    } else {
+      // When entering coach mode, look for a technique immediately
+      this.getSmartHint();
     }
+  }
 
-    const { row, col } = this.selectedCell;
-    if (this.originalBoard[row][col] !== 0) {
-      console.log('Cell already filled!');
-      return;
-    }
+  // Check if a cell is highlighted by the technique coach
+  isCoachHighlighted(row: number, col: number): boolean {
+    return this.highlightedCells.some(cell => cell.row === row && cell.col === col);
+  }
 
-    this.board[row][col] = this.solution[row][col];
-    this.notes[row][col] = [];
-    this.hintsUsed++;
+  // Get an AI-powered hint that explains the technique
+  async getSmartHint(): Promise<void> {
+    // Clear previous highlights
+    this.highlightedCells = [];
     
-    console.log(`Hint used! ${this.maxHints - this.hintsUsed} remaining`);
-
-    if (this.sudokuService.isSolved(this.board)) {
-      this.gameCompleted = true;
-      this.stopTimer();
+    // Only show a limited number of hints
+    if (this.hintsUsed >= this.maxHints) {
+      this._snackBar.open('No more hints available!', 'Close', {
+        duration: 3000,
+      });
+      return;
     }
+
+    // Get a technique-based hint from the coach service
+    const hint = await this.techniqueCoachService.getHint(this.board, this.notes);
+    
+    if (!hint) {
+      this._snackBar.open('No applicable techniques found.', 'Close', {
+        duration: 2000
+      });
+      return;
+    }
+    
+    // Store the active detection for UI rendering
+    this.activeDetection = hint;
+    
+    // Add the target cell to highlighted cells
+    if (hint.targetCell) {
+      this.highlightedCells.push(hint.targetCell);
+      
+      // Select the target cell
+      this.selectedCell = hint.targetCell;
+    }
+    
+    // Add related cells to highlighted cells
+    if (hint.relatedCells) {
+      this.highlightedCells = [...this.highlightedCells, ...hint.relatedCells];
+    }
+    
+    // Display the hint in a snackbar
+    this._snackBar.open(
+      `${hint.technique}: ${hint.explanation}`, 
+      this.coachMode ? 'Apply' : 'Got it', 
+      {
+        duration: this.coachMode ? 30000 : 5000, // Longer duration in coach mode
+        panelClass: 'technique-hint-snackbar'
+      }
+    ).onAction().subscribe(() => {
+      // When the user clicks "Apply" on the snackbar
+      if (hint.targetCell && hint.value) {
+        const { row, col } = hint.targetCell;
+        this.board[row][col] = hint.value;
+        this.notes[row][col] = [];
+        this.hintsUsed++;
+        
+        // Record that this technique was used
+        this.techniqueCoachService.recordTechniqueUsage(hint.technique, true);
+        
+        // Clear highlights after applying
+        this.highlightedCells = [];
+        this.activeDetection = null;
+        
+        // Check if the game is completed
+        if (this.sudokuService.isSolved(this.board)) {
+          this.gameCompleted = true;
+          this.stopTimer();
+        }
+      }
+    });
   }
 
-  startTimer(): void {
-    this.timer = 0;
-    this.timerInterval = setInterval(() => {
-      this.timer++;
-    }, 1000);
-  }
-
-  stopTimer(): void {
-    clearInterval(this.timerInterval);
-  }
-
-  resetTimer(): void {
-    this.stopTimer();
-    this.timer = 0;
-  }
-
-  formatTime(): string {
-    const minutes = Math.floor(this.timer / 60);
-    const seconds = this.timer % 60;
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  // Legacy hint method (now calls smart hint)
+  getHint(): void {
+    this.getSmartHint();
   }
 
   backToMenu(): void {
@@ -415,6 +471,30 @@ export class GameComponent implements OnInit, OnDestroy {
     }
     
     return sections;
+  }
+
+  // Format time (MM:SS)
+  formatTime(): string {
+    const minutes = Math.floor(this.timer / 60);
+    const seconds = this.timer % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+  
+  // Start timer
+  startTimer(): void {
+    this.stopTimer(); // Clear any existing timer
+    this.timer = 0;
+    this.timerInterval = setInterval(() => {
+      this.timer++;
+    }, 1000);
+  }
+  
+  // Stop timer
+  stopTimer(): void {
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
+    }
   }
 
   private initializeGame(grid: number[][], solution: number[][], difficulty: string): void {

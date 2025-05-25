@@ -13,6 +13,7 @@
   aspect-ratio: 1;
   min-height: 35px;
   border-radius: 2px;
+  border: 1px solid #ccc;
 }
 
 .cell:hover {
@@ -23,6 +24,7 @@
   background-color: #dbeafe !important;
   border-color: #3b82f6;
   box-shadow: inset 0 0 0 2px #3b82f6;
+  color: white;
 }
 
 .cell.original {
@@ -42,6 +44,24 @@
 
 .cell.highlighted {
   background-color: #fef3c7;
+}
+
+/* Technique coach highlight styling */
+.coach-highlighted {
+  background-color: rgba(255, 193, 7, 0.5); /* Amber highlight */
+  animation: pulse-highlight 2s infinite;
+}
+
+@keyframes pulse-highlight {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 5px rgba(255, 193, 7, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
+  }
 }
 
 /* Main value styling */
@@ -113,4 +133,34 @@
   .note-cell {
     font-size: 0.65rem;
   }
+}
+
+/* Dark theme support */
+:host-context(.dark-theme) .cell {
+  border-color: #444;
+}
+
+:host-context(.dark-theme) .original {
+  color: #ddd;
+}
+
+:host-context(.dark-theme) .selected {
+  background-color: rgba(66, 133, 244, 0.8);
+}
+
+:host-context(.dark-theme) .same-number {
+  background-color: rgba(66, 133, 244, 0.4);
+}
+
+:host-context(.dark-theme) .highlighted {
+  background-color: rgba(66, 133, 244, 0.2);
+}
+
+:host-context(.dark-theme) .notes-grid {
+  color: #999;
+}
+
+/* Technique coach highlight styling for dark theme */
+:host-context(.dark-theme) .coach-highlighted {
+  background-color: rgba(255, 193, 7, 0.6);
 }

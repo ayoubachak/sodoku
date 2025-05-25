@@ -16,6 +16,7 @@ export class CellComponent {
   @Input() isSameNumber: boolean = false;
   @Input() isConflict: boolean = false;
   @Input() isHighlighted: boolean = false;
+  @Input() isCoachHighlighted: boolean = false; // New property for technique coach highlights
   @Output() cellClick = new EventEmitter<void>();
 
   onClick(): void {
