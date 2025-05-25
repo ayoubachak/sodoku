@@ -7,8 +7,8 @@
     
     <mat-card-content>
       <div class="difficulty-selector">
-        <label for="difficulty">Difficulty:</label>
-        <mat-select id="difficulty" [(ngModel)]="selectedDifficulty">
+        <label for="difficulty">Choose Difficulty:</label>
+        <mat-select id="difficulty" [(ngModel)]="selectedDifficulty" class="difficulty-select">
           <mat-option *ngFor="let difficulty of difficulties" [value]="difficulty">
             {{ difficulty | titlecase }}
           </mat-option>
@@ -17,9 +17,14 @@
     </mat-card-content>
     
     <mat-card-actions>
-      <button mat-raised-button color="primary" (click)="startGame()">Start Game</button>
-      <button mat-raised-button color="accent" (click)="goToSettings()">Settings</button>
-      <button mat-raised-button color="warn" disabled>Watch AI Play</button>
+      <button mat-raised-button color="primary" class="primary-btn" (click)="startGame()">
+        <mat-icon>play_arrow</mat-icon>
+        Start Game
+      </button>
+      <button mat-raised-button color="accent" class="secondary-btn" (click)="goToSettings()">
+        <mat-icon>settings</mat-icon>
+        Settings
+      </button>
     </mat-card-actions>
   </mat-card>
 </div>

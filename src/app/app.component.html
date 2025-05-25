@@ -1,6 +1,11 @@
 <div class="app-container">
   <header class="app-header">
-    <h1>数独 Sudoku</h1>
+    <div class="header-content">
+      <h1>数独 Sudoku</h1>
+      <button mat-icon-button class="theme-toggle" (click)="toggleTheme()" [attr.aria-label]="isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'">
+        <mat-icon>{{ isDarkMode ? 'light_mode' : 'dark_mode' }}</mat-icon>
+      </button>
+    </div>
   </header>
   
   <main class="app-content">
@@ -8,6 +13,8 @@
   </main>
   
   <footer class="app-footer">
-    <p>Powered by <a href="https://sudoku-api.vercel.app/" target="_blank">Dosuku API</a></p>
+    <div class="footer-content">
+      <p>Powered by <a href="https://sudoku-api.vercel.app/" target="_blank">Dosuku API</a></p>
+    </div>
   </footer>
-</div> 
+</div>

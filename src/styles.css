@@ -13,20 +13,275 @@ html, body {
 }
 
 body {
-  background-color: #fafafa;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   color: #333;
+  transition: all 0.3s ease;
 }
 
 /* Dark theme styles */
 body.dark-theme {
-  background-color: #303030;
-  color: #f5f5f5;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%) !important;
+  color: #f5f5f5 !important;
 }
 
-/* Blue theme styles */
-body.blue-theme {
-  background-color: #e3f2fd;
-  color: #0d47a1;
+/* Light theme explicit styles */
+body.light-theme {
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  color: #333;
+}
+
+/* Header and Footer Dark Theme Fixes */
+body.dark-theme .app-header,
+body.dark-theme .app-header h1 {
+  background: linear-gradient(135deg, #4c1d95 0%, #5b21b6 100%) !important;
+  color: #f5f5f5 !important;
+}
+
+body.dark-theme .app-footer {
+  background: rgba(45, 45, 45, 0.9) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+body.dark-theme .app-footer p {
+  color: #9ca3af !important;
+}
+
+body.dark-theme .app-footer a {
+  color: #60a5fa !important;
+}
+
+/* Material Design components dark theme overrides */
+body.dark-theme .mat-mdc-card {
+  background: #2d2d2d !important;
+  color: #f5f5f5 !important;
+}
+
+body.dark-theme .mat-mdc-button,
+body.dark-theme .mat-mdc-raised-button,
+body.dark-theme .mat-mdc-stroked-button {
+  color: #f5f5f5 !important;
+}
+
+body.dark-theme .mat-mdc-outlined-button {
+  border-color: #4b5563 !important;
+  color: #f5f5f5 !important;
+}
+
+/* Dropdown/Select fixes */
+body.dark-theme .mat-mdc-select {
+  color: #f5f5f5 !important;
+}
+
+body.dark-theme .mat-mdc-select-value,
+body.dark-theme .mat-mdc-select-value-text {
+  color: #f5f5f5 !important;
+}
+
+body.dark-theme .mat-mdc-select-arrow {
+  color: #f5f5f5 !important;
+}
+
+body.dark-theme .mat-mdc-select-panel {
+  background: #374151 !important;
+}
+
+body.dark-theme .mat-mdc-option {
+  color: #f5f5f5 !important;
+  background: transparent !important;
+}
+
+body.dark-theme .mat-mdc-option:hover,
+body.dark-theme .mat-mdc-option.mdc-list-item--selected {
+  background: #4b5563 !important;
+}
+
+body.dark-theme .mat-mdc-form-field {
+  color: #f5f5f5 !important;
+}
+
+body.dark-theme .mat-mdc-form-field .mat-mdc-form-field-focus-overlay {
+  background-color: #f5f5f5 !important;
+}
+
+body.dark-theme .mat-mdc-snack-bar-container {
+  background: #374151 !important;
+  color: #f5f5f5 !important;
+}
+
+/* Sudoku Numbers and Game Elements Dark Theme Fixes */
+body.dark-theme .cell-value {
+  color: #f5f5f5 !important;
+}
+
+body.dark-theme .cell.original .cell-value {
+  color: #e5e7eb !important;
+  font-weight: 700 !important;
+}
+
+body.dark-theme .number-button {
+  background: #374151 !important;
+  color: #f5f5f5 !important;
+  border-color: #4b5563 !important;
+}
+
+body.dark-theme .number-button:hover {
+  background: #4b5563 !important;
+  color: #f5f5f5 !important;
+}
+
+body.dark-theme .number-button.notes-mode {
+  background: #1e40af !important;
+  border-color: #3b82f6 !important;
+  color: #f5f5f5 !important;
+}
+
+/* Settings Menu Dark Theme Fixes */
+body.dark-theme .settings-card {
+  background: #2d2d2d !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-theme .settings-group {
+  background: #374151 !important;
+  border-color: #4b5563 !important;
+}
+
+body.dark-theme .settings-group h3 {
+  color: #f3f4f6 !important;
+  border-bottom-color: #4b5563 !important;
+}
+
+body.dark-theme .setting-item {
+  background: #2d2d2d !important;
+}
+
+body.dark-theme .setting-item span {
+  color: #f3f4f6 !important;
+}
+
+body.dark-theme mat-select {
+  background: #4b5563 !important;
+  color: #f3f4f6 !important;
+}
+
+body.dark-theme .mat-mdc-slide-toggle {
+  color: #f5f5f5 !important;
+}
+
+/* Dark theme component overrides */
+body.dark-theme .game-container {
+  color: #f5f5f5 !important;
+}
+
+body.dark-theme .game-title {
+  color: #f5f5f5 !important;
+}
+
+body.dark-theme .game-header {
+  background: linear-gradient(135deg, #4c1d95 0%, #5b21b6 100%) !important;
+}
+
+body.dark-theme .sudoku-board {
+  background: #374151 !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-theme .board-grid {
+  border-color: #4b5563 !important;
+  background: #4b5563 !important;
+}
+
+body.dark-theme .board-section {
+  background: #6b7280 !important;
+}
+
+body.dark-theme .cell {
+  background-color: #374151 !important;
+  color: #f5f5f5 !important;
+}
+
+body.dark-theme .cell:hover {
+  background-color: #4b5563 !important;
+}
+
+body.dark-theme .cell.selected {
+  background-color: #1e40af !important;
+}
+
+body.dark-theme .cell.original {
+  background-color: #4b5563 !important;
+  color: #e5e7eb !important;
+}
+
+body.dark-theme .cell.highlighted {
+  background-color: #78350f !important;
+}
+
+body.dark-theme .cell.same-number {
+  background-color: #064e3b !important;
+}
+
+body.dark-theme .note-cell {
+  color: #9ca3af !important;
+}
+
+body.dark-theme .action-btn {
+  background: #374151 !important;
+  color: #f5f5f5 !important;
+}
+
+body.dark-theme .action-btn:hover {
+  background: #4b5563 !important;
+}
+
+body.dark-theme .action-btn.notes-btn.active {
+  background: #3b82f6 !important;
+}
+
+body.dark-theme .completion-modal {
+  background: #2d2d2d !important;
+  color: #f5f5f5 !important;
+}
+
+body.dark-theme .completion-content h2 {
+  color: #f5f5f5 !important;
+}
+
+body.dark-theme .stat {
+  border-bottom-color: #4b5563 !important;
+}
+
+body.dark-theme .label {
+  color: #9ca3af !important;
+}
+
+body.dark-theme .value {
+  color: #f5f5f5 !important;
+}
+
+body.dark-theme .loading-container p {
+  color: #f5f5f5 !important;
+}
+
+/* Menu Dark Theme Fixes */
+body.dark-theme .menu-card {
+  background: #2d2d2d !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-theme mat-card-subtitle {
+  color: #9ca3af !important;
+}
+
+body.dark-theme .difficulty-selector label {
+  color: #f3f4f6 !important;
+}
+
+body.dark-theme .difficulty-select {
+  background: #374151 !important;
+  color: #f3f4f6 !important;
 }
 
 /* Responsive font sizes */

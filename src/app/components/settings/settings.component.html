@@ -30,10 +30,9 @@
         
         <div class="setting-item">
           <span>Theme</span>
-          <mat-select [(ngModel)]="theme">
+          <mat-select [(ngModel)]="theme" (selectionChange)="onThemeChange()">
             <mat-option value="light">Light</mat-option>
             <mat-option value="dark">Dark</mat-option>
-            <mat-option value="blue">Blue</mat-option>
           </mat-select>
         </div>
       </div>

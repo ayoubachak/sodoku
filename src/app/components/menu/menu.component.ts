@@ -5,11 +5,12 @@ import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatSelectModule } from '@angular/material/select';
+import { MatIconModule } from '@angular/material/icon';
 
 @Component({
   selector: 'app-menu',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatCardModule, MatSelectModule],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatCardModule, MatSelectModule, MatIconModule],
   templateUrl: './menu.component.html',
   styleUrl: './menu.component.css'
 })

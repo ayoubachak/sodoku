@@ -7,6 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { SudokuService, SudokuBoard } from '../../services/sudoku.service';
+import { ThemeService } from '../../services/theme.service';
 import { CellComponent } from '../cell/cell.component';
 
 @Component({
@@ -54,6 +55,16 @@ export class GameComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    // Load theme preference and apply it
+    const savedTheme = localStorage.getItem('sudoku-theme');
+    if (savedTheme === 'dark') {
+      document.body.classList.add('dark-theme');
+      document.body.classList.remove('light-theme');
+    } else {
+      document.body.classList.add('light-theme');
+      document.body.classList.remove('dark-theme');
+    }
+
     this.route.queryParams.subscribe(params => {
       if (params['difficulty']) {
         this.difficulty = params['difficulty'];
