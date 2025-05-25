@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, AfterViewInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -105,11 +105,38 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
     isHighlighted: boolean;
   }[][] = [];
 
+  // Pre-calculated random values for thinking process visualization
+  thinkingProbabilities: number[] = [];
+  thinkingQValues: number[] = [];
+
   constructor(
     private router: Router,
     private sudokuService: SudokuService,
-    private snackBar: MatSnackBar
-  ) {}
+    private snackBar: MatSnackBar,
+    private cdr: ChangeDetectorRef
+  ) {
+    // Pre-generate random values for thinking visualization
+    this.generateRandomThinkingValues();
+  }
+
+  // Generate fixed random values to avoid ExpressionChangedAfterItHasBeenCheckedError
+  private generateRandomThinkingValues(): void {
+    // Generate 20 random probabilities between 0.5 and 1.0
+    for (let i = 0; i < 20; i++) {
+      this.thinkingProbabilities.push(0.5 + Math.random() * 0.5);
+      this.thinkingQValues.push(Math.random() * 5);
+    }
+  }
+
+  // Get a pre-generated probability value
+  getThinkingProbability(index: number): number {
+    return this.thinkingProbabilities[index % this.thinkingProbabilities.length];
+  }
+
+  // Get a pre-generated Q-value
+  getThinkingQValue(index: number): number {
+    return this.thinkingQValues[index % this.thinkingQValues.length];
+  }
 
   ngOnInit(): void {
     // Initialize board
@@ -117,8 +144,11 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
   }
   
   ngAfterViewInit(): void {
-    // Create empty charts
-    this.initializeCharts();
+    // Create charts with a slight delay to ensure DOM elements are ready
+    setTimeout(() => {
+      this.initializeCharts();
+      this.cdr.detectChanges();
+    }, 100);
   }
   
   ngOnDestroy(): void {
@@ -289,7 +319,10 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
     const accuracyCtx = document.getElementById('accuracyChart') as HTMLCanvasElement;
     const rewardCtx = document.getElementById('rewardChart') as HTMLCanvasElement;
     
-    if (!accuracyCtx || !rewardCtx) return;
+    if (!accuracyCtx || !rewardCtx) {
+      console.warn('Chart canvases not found in DOM. Charts will not be initialized.');
+      return;
+    }
     
     // Create charts
     this.accuracyChart = new Chart(accuracyCtx, {
@@ -306,14 +339,14 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
         }]
       },
       options: {
+        responsive: true,
+        maintainAspectRatio: false,
         scales: {
           y: {
             beginAtZero: true,
             max: 100
           }
-        },
-        responsive: true,
-        maintainAspectRatio: false
+        }
       }
     });
     
@@ -331,19 +364,20 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
         }]
       },
       options: {
+        responsive: true,
+        maintainAspectRatio: false,
         scales: {
           y: {
             beginAtZero: false
           }
-        },
-        responsive: true,
-        maintainAspectRatio: false
+        }
       }
     });
   }
   
   updateCharts(): void {
     if (!this.accuracyChart || !this.rewardChart) {
+      console.warn('Charts not initialized. Cannot update.');
       return;
     }
     
