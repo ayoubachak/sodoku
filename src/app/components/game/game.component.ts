@@ -10,6 +10,7 @@ import { CellComponent } from '../cell/cell.component';
 import { SudokuService, SudokuBoard } from '../../services/sudoku.service';
 import { LocalSudokuGeneratorService } from '../../services/local-sudoku-generator.service';
 import { TechniqueCoachService, TechniqueDetection, SudokuTechnique } from '../../services/technique-coach.service';
+import { TechniqueDialogComponent } from '../technique-dialog/technique-dialog.component';
 
 @Component({
   selector: 'app-game',
@@ -41,13 +42,20 @@ export class GameComponent implements OnInit, OnDestroy {
   highlightedCells: { row: number, col: number }[] = [];
   activeDetection: TechniqueDetection | null = null;
   coachMode: boolean = false;
+  teachingStep: 'identify' | 'explain' | 'apply' | 'complete' = 'identify';
+  pendingTechniques: TechniqueDetection[] = [];
+  currentTeachingIndex: number = -1;
+  notesRequired: boolean = false;
+  singleCellHintRequested: boolean = false;
+  targetCellForHint: { row: number, col: number } | null = null;
 
   constructor(
     private readonly router: Router, 
     private readonly sudokuService: SudokuService,
     private readonly localGenerator: LocalSudokuGeneratorService,
     private _snackBar: MatSnackBar,
-    private techniqueCoachService: TechniqueCoachService
+    private techniqueCoachService: TechniqueCoachService,
+    private dialog: MatDialog
   ) {
     // Initialize notes array
     this.initializeNotes();
@@ -344,9 +352,12 @@ export class GameComponent implements OnInit, OnDestroy {
       // Clear any highlights when exiting coach mode
       this.highlightedCells = [];
       this.activeDetection = null;
+      this.pendingTechniques = [];
+      this.currentTeachingIndex = -1;
+      this.teachingStep = 'identify';
     } else {
-      // When entering coach mode, look for a technique immediately
-      this.getSmartHint();
+      // When entering coach mode, start the step by step teaching
+      this.startTeachingMode();
     }
   }
 
@@ -355,8 +366,168 @@ export class GameComponent implements OnInit, OnDestroy {
     return this.highlightedCells.some(cell => cell.row === row && cell.col === col);
   }
 
+  // Start the teaching mode process which guides users step by step
+  async startTeachingMode(): Promise<void> {
+    // Clear previous state
+    this.highlightedCells = [];
+    this.pendingTechniques = [];
+    
+    // Check if there are empty cells without notes
+    let hasEmptyCellsWithoutNotes = false;
+    for (let row = 0; row < 9; row++) {
+      for (let col = 0; col < 9; col++) {
+        if (this.board[row][col] === 0 && this.notes[row][col].length === 0) {
+          hasEmptyCellsWithoutNotes = true;
+          break;
+        }
+      }
+      if (hasEmptyCellsWithoutNotes) break;
+    }
+
+    if (hasEmptyCellsWithoutNotes) {
+      // Alert the user that notes are needed for effective teaching
+      this.notesRequired = true;
+      this._snackBar.open(
+        'To effectively learn techniques, notes are needed for empty cells. Would you like to auto-fill notes?',
+        'Auto-fill Notes',
+        { duration: 10000 }
+      ).onAction().subscribe(() => {
+        this.autoFillAllNotes();
+        this.continueTeachingProcess();
+      });
+    } else {
+      this.continueTeachingProcess();
+    }
+  }
+
+  // Continue the teaching process after ensuring notes are available
+  async continueTeachingProcess(): Promise<void> {
+    // Get all applicable techniques
+    this.pendingTechniques = await this.techniqueCoachService.detectTechniques(this.board, this.notes);
+
+    if (this.pendingTechniques.length === 0) {
+      this._snackBar.open(
+        'No applicable solving techniques found. Try filling in more notes or using direct elimination.',
+        'Close',
+        { duration: 5000 }
+      );
+      return;
+    }
+
+    // Start with the first technique
+    this.currentTeachingIndex = 0;
+    this.teachTechnique();
+  }
+
+  // Teach the current technique
+  async teachTechnique(): Promise<void> {
+    if (this.currentTeachingIndex < 0 || this.currentTeachingIndex >= this.pendingTechniques.length) {
+      return;
+    }
+
+    const technique = this.pendingTechniques[this.currentTeachingIndex];
+    this.activeDetection = technique;
+    this.teachingStep = 'identify';
+
+    // Clear previous highlights
+    this.highlightedCells = [];
+
+    // Highlight the target cell
+    if (technique.targetCell) {
+      this.highlightedCells.push(technique.targetCell);
+      this.selectedCell = technique.targetCell;
+    }
+
+    // Also highlight related cells if any
+    if (technique.relatedCells) {
+      this.highlightedCells = [...this.highlightedCells, ...technique.relatedCells];
+    }
+
+    // Show a dialog explaining the technique
+    const dialogRef = this.dialog.open(TechniqueDialogComponent, {
+      data: {
+        title: `Learn: ${technique.technique}`,
+        message: `<p>${technique.detailExplanation || technique.explanation}</p>
+                 <p>Do you want to apply this technique to solve this cell?</p>`,
+        technique: technique.technique,
+        position: technique.targetCell,
+        value: technique.value
+      },
+      width: '400px'
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result === 'apply') {
+        this.applyTechniqueAndContinue();
+      } else {
+        // If user cancels, remain in coach mode but don't proceed
+        this.highlightedCells = [];
+        this.activeDetection = null;
+      }
+    });
+  }
+
+  // Apply the current technique and continue to the next one
+  applyTechniqueAndContinue(): void {
+    if (!this.activeDetection || !this.activeDetection.targetCell || !this.activeDetection.value) {
+      return;
+    }
+
+    const { row, col } = this.activeDetection.targetCell;
+    const value = this.activeDetection.value;
+
+    // Apply the technique (set the value in the board)
+    this.board[row][col] = value;
+    this.notes[row][col] = [];
+
+    // Record technique usage
+    this.techniqueCoachService.recordTechniqueUsage(this.activeDetection.technique, true);
+
+    // Eliminate this number from related cells' notes
+    this.eliminateNotesFromRelatedCells(row, col, value);
+
+    // Clear highlights
+    this.highlightedCells = [];
+    this.activeDetection = null;
+
+    // Check if the game is completed
+    if (this.sudokuService.isSolved(this.board)) {
+      this.gameCompleted = true;
+      this.stopTimer();
+      this.coachMode = false;
+      return;
+    }
+
+    // Move to the next technique
+    this.currentTeachingIndex++;
+    if (this.currentTeachingIndex < this.pendingTechniques.length) {
+      // Slight delay before showing the next technique
+      setTimeout(() => this.teachTechnique(), 500);
+    } else {
+      // No more techniques to teach at the moment
+      this._snackBar.open(
+        'You\'ve applied all available techniques! Try using Auto Notes again to find more.',
+        'Continue',
+        { duration: 6000 }
+      ).onAction().subscribe(() => {
+        this.autoFillAllNotes();
+        this.startTeachingMode();
+      });
+    }
+  }
+
   // Get an AI-powered hint that explains the technique
   async getSmartHint(): Promise<void> {
+    // If a specific cell is selected and we're not in coach mode, try to get a hint for that cell
+    if (this.selectedCell && !this.coachMode) {
+      await this.getHintForSelectedCell();
+      return;
+    }
+
+    // Standard hint behavior for coach mode or when no cell is selected
+    this.singleCellHintRequested = false;
+    this.targetCellForHint = null;
+    
     // Clear previous highlights
     this.highlightedCells = [];
     
@@ -394,36 +565,169 @@ export class GameComponent implements OnInit, OnDestroy {
       this.highlightedCells = [...this.highlightedCells, ...hint.relatedCells];
     }
     
-    // Display the hint in a snackbar
-    this._snackBar.open(
-      `${hint.technique}: ${hint.explanation}`, 
-      this.coachMode ? 'Apply' : 'Got it', 
-      {
-        duration: this.coachMode ? 30000 : 5000, // Longer duration in coach mode
-        panelClass: 'technique-hint-snackbar'
-      }
-    ).onAction().subscribe(() => {
-      // When the user clicks "Apply" on the snackbar
-      if (hint.targetCell && hint.value) {
-        const { row, col } = hint.targetCell;
-        this.board[row][col] = hint.value;
-        this.notes[row][col] = [];
-        this.hintsUsed++;
-        
-        // Record that this technique was used
-        this.techniqueCoachService.recordTechniqueUsage(hint.technique, true);
-        
-        // Clear highlights after applying
-        this.highlightedCells = [];
-        this.activeDetection = null;
-        
-        // Check if the game is completed
-        if (this.sudokuService.isSolved(this.board)) {
-          this.gameCompleted = true;
-          this.stopTimer();
+    // If we're in coach mode, show a more detailed dialog
+    if (this.coachMode) {
+      const dialogRef = this.dialog.open(TechniqueDialogComponent, {
+        data: {
+          title: `Hint: ${hint.technique}`,
+          message: `<p>${hint.detailExplanation || hint.explanation}</p>`,
+          technique: hint.technique,
+          position: hint.targetCell,
+          value: hint.value
+        },
+        width: '400px'
+      });
+
+      dialogRef.afterClosed().subscribe(result => {
+        if (result === 'apply') {
+          this.applyHint(hint);
+        } else {
+          // If user cancels, clear highlights
+          this.highlightedCells = [];
+          this.activeDetection = null;
         }
+      });
+    } else {
+      // Otherwise, show the simple snackbar
+      this._snackBar.open(
+        `${hint.technique}: ${hint.explanation}`, 
+        'Apply', 
+        {
+          duration: 5000,
+          panelClass: 'technique-hint-snackbar'
+        }
+      ).onAction().subscribe(() => {
+        this.applyHint(hint);
+      });
+    }
+  }
+
+  // Get a hint for the currently selected cell
+  async getHintForSelectedCell(): Promise<void> {
+    if (!this.selectedCell) return;
+    
+    this.singleCellHintRequested = true;
+    this.targetCellForHint = this.selectedCell;
+    const { row, col } = this.selectedCell;
+
+    // Only show a limited number of hints
+    if (this.hintsUsed >= this.maxHints) {
+      this._snackBar.open('No more hints available!', 'Close', {
+        duration: 3000,
+      });
+      return;
+    }
+
+    // If the cell is already filled
+    if (this.board[row][col] !== 0) {
+      this._snackBar.open('This cell is already filled.', 'Close', {
+        duration: 2000
+      });
+      return;
+    }
+
+    // Try to get a hint specifically for this cell
+    const hint = await this.techniqueCoachService.getHintForCell(this.board, this.notes, row, col);
+    
+    if (hint) {
+      // We found a technique for this cell
+      this.activeDetection = hint;
+      
+      // Highlight the related cells if any
+      this.highlightedCells = [];
+      if (hint.relatedCells) {
+        this.highlightedCells = [...hint.relatedCells];
       }
-    });
+      
+      // Open a dialog to explain the technique
+      const dialogRef = this.dialog.open(TechniqueDialogComponent, {
+        data: {
+          title: `Hint for Selected Cell: ${hint.technique}`,
+          message: `<p>${hint.detailExplanation || hint.explanation}</p>`,
+          technique: hint.technique,
+          position: { row, col },
+          value: hint.value,
+          showRevealOption: true
+        },
+        width: '400px'
+      });
+
+      dialogRef.afterClosed().subscribe(result => {
+        if (result === 'apply') {
+          // Apply the hint (technique)
+          this.applyHint(hint);
+        } else if (result === 'reveal') {
+          // Just reveal the value
+          this.revealCellValue(row, col);
+        } else {
+          // If user cancels, clear highlights
+          this.highlightedCells = [];
+          this.activeDetection = null;
+        }
+      });
+    } else {
+      // No technique found for this cell, offer to reveal the value
+      const dialogRef = this.dialog.open(TechniqueDialogComponent, {
+        data: {
+          title: 'No Technique Available',
+          message: `<p>There are no applicable techniques for this cell at the moment. Would you like to reveal the value?</p>`,
+          position: { row, col },
+          showRevealOption: true
+        },
+        width: '400px'
+      });
+
+      dialogRef.afterClosed().subscribe(result => {
+        if (result === 'reveal') {
+          this.revealCellValue(row, col);
+        }
+      });
+    }
+  }
+
+  // Directly reveal a cell's value from the solution
+  revealCellValue(row: number, col: number): void {
+    if (this.board[row][col] !== 0) return;
+    
+    const value = this.solution[row][col];
+    this.board[row][col] = value;
+    this.notes[row][col] = [];
+    this.hintsUsed++;
+    
+    // Eliminate this number from related cells' notes
+    this.eliminateNotesFromRelatedCells(row, col, value);
+    
+    // Check if the game is completed
+    if (this.sudokuService.isSolved(this.board)) {
+      this.gameCompleted = true;
+      this.stopTimer();
+    }
+  }
+
+  // Apply a hint to the board
+  applyHint(hint: TechniqueDetection): void {
+    if (hint.targetCell && hint.value) {
+      const { row, col } = hint.targetCell;
+      this.board[row][col] = hint.value;
+      this.notes[row][col] = [];
+      this.hintsUsed++;
+      
+      // Record that this technique was used
+      this.techniqueCoachService.recordTechniqueUsage(hint.technique, true);
+      
+      // Eliminate this number from related cells' notes
+      this.eliminateNotesFromRelatedCells(row, col, hint.value);
+      
+      // Clear highlights after applying
+      this.highlightedCells = [];
+      this.activeDetection = null;
+      
+      // Check if the game is completed
+      if (this.sudokuService.isSolved(this.board)) {
+        this.gameCompleted = true;
+        this.stopTimer();
+      }
+    }
   }
 
   // Legacy hint method (now calls smart hint)

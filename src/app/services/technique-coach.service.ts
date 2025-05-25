@@ -23,6 +23,8 @@ export interface TechniqueDetection {
   explanation: string;
   value?: number; // The digit to be placed
   confidence: number; // Model confidence score
+  detailExplanation?: string; // Additional detailed explanation for teaching mode
+  prerequisites?: string[]; // Any prerequisites needed (like "notes required")
 }
 
 // Interface for technique usage statistics
@@ -133,6 +135,7 @@ export class TechniqueCoachService {
    */
   private detectTechniquesRuleBased(board: number[][], notes: number[][][]): TechniqueDetection[] {
     const detections: TechniqueDetection[] = [];
+    const hasEmptyCellsWithoutNotes = this.checkEmptyCellsWithoutNotes(board, notes);
     
     // Check for Naked Singles (cells with only one candidate)
     for (let row = 0; row < 9; row++) {
@@ -148,7 +151,8 @@ export class TechniqueCoachService {
             targetCell: { row, col },
             explanation: `Only the number ${value} can go in this cell, as all other candidates have been eliminated.`,
             value,
-            confidence: 0.95
+            confidence: 0.95,
+            detailExplanation: `In R${row+1}C${col+1}, all other candidates have been eliminated, leaving ${value} as the only possible value. This is called a "Naked Single" because the single candidate is directly visible.`
           });
         }
       }
@@ -181,16 +185,107 @@ export class TechniqueCoachService {
             targetCell: { row, col: info.col },
             explanation: `Only this cell in row ${row + 1} can contain the number ${digit}, as it's eliminated from all other cells.`,
             value: digit,
-            confidence: 0.9
+            confidence: 0.9,
+            detailExplanation: `In row ${row+1}, the number ${digit} can only go in column ${info.col+1} because it's eliminated from all other cells in this row. This is called a "Hidden Single" because the unique placement isn't immediately obvious.`
           });
         }
       }
     }
     
-    // Add more technique detection logic as needed
-    // Column-based hidden singles, box-based hidden singles, naked pairs, etc.
+    // Column-based hidden singles
+    for (let col = 0; col < 9; col++) {
+      const digitAppearances = new Map<number, { count: number, row: number }>();
+      
+      // Count appearances of each digit as a candidate in this column
+      for (let row = 0; row < 9; row++) {
+        if (board[row][col] !== 0) continue;
+        
+        for (const digit of notes[row][col]) {
+          if (!digitAppearances.has(digit)) {
+            digitAppearances.set(digit, { count: 1, row });
+          } else {
+            const current = digitAppearances.get(digit)!;
+            digitAppearances.set(digit, { count: current.count + 1, row: current.row });
+          }
+        }
+      }
+      
+      // Check if any digit appears only once
+      for (const [digit, info] of digitAppearances.entries()) {
+        if (info.count === 1) {
+          detections.push({
+            technique: SudokuTechnique.HIDDEN_SINGLE,
+            targetCell: { row: info.row, col },
+            explanation: `Only this cell in column ${col + 1} can contain the number ${digit}, as it's eliminated from all other cells.`,
+            value: digit,
+            confidence: 0.9,
+            detailExplanation: `In column ${col+1}, the number ${digit} can only go in row ${info.row+1} because it's eliminated from all other cells in this column. This is a column-based "Hidden Single".`
+          });
+        }
+      }
+    }
+    
+    // Box-based hidden singles
+    for (let boxRow = 0; boxRow < 3; boxRow++) {
+      for (let boxCol = 0; boxCol < 3; boxCol++) {
+        const boxStartRow = boxRow * 3;
+        const boxStartCol = boxCol * 3;
+        const digitAppearances = new Map<number, { count: number, row: number, col: number }>();
+        
+        // Count appearances of each digit as a candidate in this box
+        for (let r = boxStartRow; r < boxStartRow + 3; r++) {
+          for (let c = boxStartCol; c < boxStartCol + 3; c++) {
+            if (board[r][c] !== 0) continue;
+            
+            for (const digit of notes[r][c]) {
+              if (!digitAppearances.has(digit)) {
+                digitAppearances.set(digit, { count: 1, row: r, col: c });
+              } else {
+                const current = digitAppearances.get(digit)!;
+                digitAppearances.set(digit, { count: current.count + 1, row: current.row, col: current.col });
+              }
+            }
+          }
+        }
+        
+        // Check if any digit appears only once
+        for (const [digit, info] of digitAppearances.entries()) {
+          if (info.count === 1) {
+            detections.push({
+              technique: SudokuTechnique.HIDDEN_SINGLE,
+              targetCell: { row: info.row, col: info.col },
+              explanation: `Only this cell in box ${boxRow * 3 + boxCol + 1} can contain the number ${digit}.`,
+              value: digit,
+              confidence: 0.9,
+              detailExplanation: `In the ${boxRow * 3 + boxCol + 1} box, the number ${digit} can only go at R${info.row+1}C${info.col+1} because it's eliminated from all other cells in this box. This is a box-based "Hidden Single".`
+            });
+          }
+        }
+      }
+    }
+    
+    // Add prerequisites indicator if needed
+    if (hasEmptyCellsWithoutNotes) {
+      detections.forEach(detection => {
+        detection.prerequisites = ['You need to fill in the notes (candidates) for empty cells to use this technique effectively.'];
+      });
+    }
     
     return detections;
+  }
+  
+  /**
+   * Check if there are empty cells without notes
+   */
+  private checkEmptyCellsWithoutNotes(board: number[][], notes: number[][][]): boolean {
+    for (let row = 0; row < 9; row++) {
+      for (let col = 0; col < 9; col++) {
+        if (board[row][col] === 0 && notes[row][col].length === 0) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
   
   /**
@@ -208,6 +303,35 @@ export class TechniqueCoachService {
     return techniques[0];
   }
   
+  /**
+   * Checks if a specific technique can be applied to a specific cell
+   * @param board The current Sudoku board
+   * @param notes The notes/candidates for each cell
+   * @param row The row of the cell to check
+   * @param col The column of the cell to check
+   * @returns A technique that can be applied to this cell, or null if none found
+   */
+  async getHintForCell(board: number[][], notes: number[][][], row: number, col: number): Promise<TechniqueDetection | null> {
+    // Skip if the cell is already filled
+    if (board[row][col] !== 0) return null;
+    
+    const techniques = await this.detectTechniques(board, notes);
+    
+    // Check for techniques targeting this specific cell
+    const cellTechniques = techniques.filter(t => 
+      t.targetCell && t.targetCell.row === row && t.targetCell.col === col
+    );
+    
+    if (cellTechniques.length > 0) {
+      // Sort by confidence and choose the highest confidence technique
+      cellTechniques.sort((a, b) => b.confidence - a.confidence);
+      return cellTechniques[0];
+    }
+    
+    // If no techniques found for this cell, return null
+    return null;
+  }
+
   /**
    * Records that a technique was used by the player
    */
