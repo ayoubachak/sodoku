@@ -177,6 +177,22 @@ body.dark-theme .secondary-btn {
   box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
 }
 
+.game-description {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.game-description p {
+  font-size: 1.1rem;
+  color: #6b7280;
+  line-height: 1.6;
+  margin: 0;
+}
+
+body.dark-theme .game-description p {
+  color: #9ca3af;
+}
+
 @media (min-width: 768px) {
   mat-card-actions {
     flex-direction: row;

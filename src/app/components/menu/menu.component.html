@@ -2,24 +2,19 @@
   <mat-card class="menu-card">
     <mat-card-header>
       <mat-card-title>Sudoku Game</mat-card-title>
-      <mat-card-subtitle>Select difficulty and start playing</mat-card-subtitle>
+      <mat-card-subtitle>Start playing and challenge yourself</mat-card-subtitle>
     </mat-card-header>
     
     <mat-card-content>
-      <div class="difficulty-selector">
-        <label for="difficulty">Choose Difficulty:</label>
-        <mat-select id="difficulty" [(ngModel)]="selectedDifficulty" class="difficulty-select">
-          <mat-option *ngFor="let difficulty of difficulties" [value]="difficulty">
-            {{ difficulty | titlecase }}
-          </mat-option>
-        </mat-select>
+      <div class="game-description">
+        <p>Get ready for a challenging Sudoku puzzle! Each game will present you with a randomly generated board.</p>
       </div>
     </mat-card-content>
     
     <mat-card-actions>
       <button mat-raised-button color="primary" class="primary-btn" (click)="startGame()">
         <mat-icon>play_arrow</mat-icon>
-        Start Game
+        Start New Game
       </button>
       <button mat-raised-button color="accent" class="secondary-btn" (click)="goToSettings()">
         <mat-icon>settings</mat-icon>

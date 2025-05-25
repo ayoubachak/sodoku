@@ -7,6 +7,33 @@
     
     <mat-card-content>
       <div class="settings-group">
+        <h3>Puzzle Source</h3>
+        
+        <div class="setting-item">
+          <span>Use Online API</span>
+          <mat-slide-toggle [(ngModel)]="useApi" (change)="onApiToggle()"></mat-slide-toggle>
+        </div>
+        
+        <div class="setting-item" *ngIf="!useApi">
+          <span>Local Difficulty</span>
+          <mat-select [(ngModel)]="localDifficulty">
+            <mat-option value="easy">Easy</mat-option>
+            <mat-option value="medium">Medium</mat-option>
+            <mat-option value="hard">Hard</mat-option>
+            <mat-option value="expert">Expert</mat-option>
+          </mat-select>
+        </div>
+        
+        <div class="api-info" *ngIf="useApi">
+          <p><mat-icon>info</mat-icon> Random puzzles from online API</p>
+        </div>
+        
+        <div class="local-info" *ngIf="!useApi">
+          <p><mat-icon>offline_pin</mat-icon> Locally generated puzzles with selected difficulty</p>
+        </div>
+      </div>
+
+      <div class="settings-group">
         <h3>Game Options</h3>
         
         <div class="setting-item">

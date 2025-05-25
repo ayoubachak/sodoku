@@ -223,6 +223,44 @@ body.dark-theme button:not([color]):hover {
   border-color: #6b7280;
 }
 
+/* API and local info sections styling */
+.api-info,
+.local-info {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 8px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+}
+
+body.dark-theme .api-info,
+body.dark-theme .local-info {
+  background: #1e3a8a;
+  border-color: #3b82f6;
+}
+
+.api-info p,
+.local-info p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #0369a1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+body.dark-theme .api-info p,
+body.dark-theme .local-info p {
+  color: #93c5fd;
+}
+
+.api-info mat-icon,
+.local-info mat-icon {
+  font-size: 1.1rem;
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
 @media (max-width: 768px) {
   .settings-container {
     padding: 0.5rem;

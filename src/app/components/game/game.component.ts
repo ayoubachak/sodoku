@@ -1,31 +1,21 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, Router } from '@angular/router';
-import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { SudokuService, SudokuBoard } from '../../services/sudoku.service';
-import { ThemeService } from '../../services/theme.service';
 import { CellComponent } from '../cell/cell.component';
+import { SudokuService, SudokuBoard } from '../../services/sudoku.service';
+import { LocalSudokuGeneratorService } from '../../services/local-sudoku-generator.service';
 
 @Component({
   selector: 'app-game',
   standalone: true,
-  imports: [
-    CommonModule, 
-    FormsModule, 
-    MatButtonModule, 
-    MatIconModule, 
-    MatSnackBarModule,
-    MatTooltipModule,
-    CellComponent
-  ],
+  imports: [CommonModule, MatButtonModule, MatIconModule, MatTooltipModule, CellComponent],
   templateUrl: './game.component.html',
   styleUrl: './game.component.css'
 })
-export class GameComponent implements OnInit {
+export class GameComponent implements OnInit, OnDestroy {
   board: number[][] = [];
   notes: number[][][] = []; // 9x9 grid of arrays for notes
   solution: number[][] = [];
@@ -45,10 +35,9 @@ export class GameComponent implements OnInit {
   Math = Math;
 
   constructor(
+    private readonly router: Router, 
     private readonly sudokuService: SudokuService,
-    private readonly route: ActivatedRoute,
-    private readonly router: Router,
-    private readonly snackBar: MatSnackBar
+    private readonly localGenerator: LocalSudokuGeneratorService
   ) {
     // Initialize notes array
     this.initializeNotes();
@@ -65,12 +54,11 @@ export class GameComponent implements OnInit {
       document.body.classList.remove('dark-theme');
     }
 
-    this.route.queryParams.subscribe(params => {
-      if (params['difficulty']) {
-        this.difficulty = params['difficulty'];
-      }
-      this.loadNewGame();
-    });
+    this.startNewGame();
+  }
+
+  ngOnDestroy(): void {
+    this.stopTimer();
   }
 
   initializeNotes(): void {
@@ -79,32 +67,82 @@ export class GameComponent implements OnInit {
     );
   }
 
-  loadNewGame(): void {
+  startNewGame(): void {
     this.loading = true;
-    this.mistakes = 0;
-    this.gameCompleted = false;
-    this.hintsUsed = 0;
-    this.notesMode = false;
-    this.resetTimer();
-    this.initializeNotes();
+    this.resetGame();
     
-    this.sudokuService.getNewBoard(this.difficulty).subscribe({
-      next: (data: SudokuBoard) => {
-        this.board = JSON.parse(JSON.stringify(data.grid));
-        this.solution = data.solution;
-        this.originalBoard = JSON.parse(JSON.stringify(data.grid));
-        this.difficulty = data.difficulty;
-        this.loading = false;
-        this.startTimer();
-      },
-      error: (error) => {
-        console.error('Error loading Sudoku board:', error);
-        this.snackBar.open('Failed to load Sudoku board. Please try again.', 'Close', {
-          duration: 3000
-        });
-        this.loading = false;
-      }
-    });
+    // Check if we should use API or local generator
+    const settings = this.getSettings();
+    
+    if (settings.useApi) {
+      // Use online API
+      this.sudokuService.getNewBoard().subscribe({
+        next: (board: SudokuBoard) => {
+          this.initializeGame(board.grid, board.solution, board.difficulty);
+          this.loading = false;
+        },
+        error: (error) => {
+          console.error('Error loading puzzle from API:', error);
+          // Fallback to local generator if API fails
+          this.generateLocalPuzzle(settings.localDifficulty);
+        }
+      });
+    } else {
+      // Use local generator
+      this.generateLocalPuzzle(settings.localDifficulty);
+    }
+  }
+
+  private generateLocalPuzzle(difficulty: string): void {
+    try {
+      const localBoard = this.localGenerator.generateBoard(difficulty as 'easy' | 'medium' | 'hard' | 'expert');
+      this.initializeGame(localBoard.grid, localBoard.solution, localBoard.difficulty);
+      this.loading = false;
+    } catch (error) {
+      console.error('Error generating local puzzle:', error);
+      // Use fallback if local generation fails
+      this.initializeGame(this.getFallbackPuzzle().grid, this.getFallbackPuzzle().solution, 'Medium');
+      this.loading = false;
+    }
+  }
+
+  private getSettings() {
+    const savedSettings = localStorage.getItem('sudokuSettings');
+    return savedSettings ? JSON.parse(savedSettings) : {
+      useApi: true,
+      localDifficulty: 'medium'
+    };
+  }
+
+  private getFallbackPuzzle() {
+    return {
+      grid: [
+        [5, 3, 0, 0, 7, 0, 0, 0, 0],
+        [6, 0, 0, 1, 9, 5, 0, 0, 0],
+        [0, 9, 8, 0, 0, 0, 0, 6, 0],
+        [8, 0, 0, 0, 6, 0, 0, 0, 3],
+        [4, 0, 0, 8, 0, 3, 0, 0, 1],
+        [7, 0, 0, 0, 2, 0, 0, 0, 6],
+        [0, 6, 0, 0, 0, 0, 2, 8, 0],
+        [0, 0, 0, 4, 1, 9, 0, 0, 5],
+        [0, 0, 0, 0, 8, 0, 0, 7, 9]
+      ],
+      solution: [
+        [5, 3, 4, 6, 7, 8, 9, 1, 2],
+        [6, 7, 2, 1, 9, 5, 3, 4, 8],
+        [1, 9, 8, 3, 4, 2, 5, 6, 7],
+        [8, 5, 9, 7, 6, 1, 4, 2, 3],
+        [4, 2, 6, 8, 5, 3, 7, 9, 1],
+        [7, 1, 3, 9, 2, 4, 8, 5, 6],
+        [9, 6, 1, 5, 3, 7, 2, 8, 4],
+        [2, 8, 7, 4, 1, 9, 6, 3, 5],
+        [3, 4, 5, 2, 8, 6, 1, 7, 9]
+      ]
+    };
+  }
+
+  loadNewGame(): void {
+    this.startNewGame();
   }
 
   selectCell(row: number, col: number): void {
@@ -162,21 +200,15 @@ export class GameComponent implements OnInit {
         if (this.sudokuService.isSolved(this.board)) {
           this.gameCompleted = true;
           this.stopTimer();
-          this.snackBar.open('Congratulations! You solved the puzzle!', 'Close', {
-            duration: 5000
-          });
+          console.log('Congratulations! You solved the puzzle!');
         }
       } else {
         // Increment mistakes counter
         this.mistakes++;
-        this.snackBar.open('Incorrect number!', 'Close', {
-          duration: 1000
-        });
+        console.log('Incorrect number!');
         
         if (this.mistakes >= 3) {
-          this.snackBar.open('Game over! Too many mistakes.', 'Close', {
-            duration: 3000
-          });
+          console.log('Game over! Too many mistakes.');
         }
       }
     }
@@ -266,9 +298,7 @@ export class GameComponent implements OnInit {
       }
     }
     
-    this.snackBar.open('Auto-filled notes for all empty cells!', 'Close', {
-      duration: 2000
-    });
+    console.log('Auto-filled notes for all empty cells!');
   }
 
   toggleNote(row: number, col: number, num: number): void {
@@ -296,13 +326,13 @@ export class GameComponent implements OnInit {
 
   getHint(): void {
     if (this.hintsUsed >= this.maxHints || !this.selectedCell) {
-      this.snackBar.open('No more hints available!', 'Close', { duration: 2000 });
+      console.log('No more hints available!');
       return;
     }
 
     const { row, col } = this.selectedCell;
     if (this.originalBoard[row][col] !== 0) {
-      this.snackBar.open('Cell already filled!', 'Close', { duration: 2000 });
+      console.log('Cell already filled!');
       return;
     }
 
@@ -310,9 +340,7 @@ export class GameComponent implements OnInit {
     this.notes[row][col] = [];
     this.hintsUsed++;
     
-    this.snackBar.open(`Hint used! ${this.maxHints - this.hintsUsed} remaining`, 'Close', {
-      duration: 2000
-    });
+    console.log(`Hint used! ${this.maxHints - this.hintsUsed} remaining`);
 
     if (this.sudokuService.isSolved(this.board)) {
       this.gameCompleted = true;
@@ -348,7 +376,7 @@ export class GameComponent implements OnInit {
   }
 
   newGame(): void {
-    this.loadNewGame();
+    this.startNewGame();
   }
 
   // Get board organized into 3x3 sections for proper display
@@ -382,5 +410,26 @@ export class GameComponent implements OnInit {
     }
     
     return sections;
+  }
+
+  private initializeGame(grid: number[][], solution: number[][], difficulty: string): void {
+    this.board = JSON.parse(JSON.stringify(grid));
+    this.solution = JSON.parse(JSON.stringify(solution));
+    this.originalBoard = JSON.parse(JSON.stringify(grid));
+    this.difficulty = difficulty;
+    this.loading = false;
+    this.startTimer();
+  }
+
+  private resetGame(): void {
+    this.board = Array(9).fill(null).map(() => Array(9).fill(0));
+    this.notes = Array(9).fill(null).map(() => Array(9).fill(null).map(() => []));
+    this.selectedCell = null;
+    this.loading = true;
+    this.timer = 0;
+    this.mistakes = 0;
+    this.gameCompleted = false;
+    this.notesMode = false;
+    this.hintsUsed = 0;
   }
 }
