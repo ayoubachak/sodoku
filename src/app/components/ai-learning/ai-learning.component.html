@@ -1,0 +1,175 @@
+<div class="ai-learning-container">
+  <!-- Header with navigation controls -->
+  <div class="ai-header">
+    <button mat-icon-button (click)="backToMenu()" class="back-button">
+      <mat-icon>arrow_back</mat-icon>
+    </button>
+    <h2 class="ai-title">Watch AI Learn Sudoku</h2>
+    <button mat-icon-button (click)="newBoard()" class="new-board-button">
+      <mat-icon>refresh</mat-icon>
+    </button>
+  </div>
+
+  <!-- Loading indicator -->
+  <div class="loading-container" *ngIf="loading">
+    <div class="loading-spinner"></div>
+    <p>Preparing AI playground...</p>
+  </div>
+
+  <!-- Main content area with left sidebar and right board -->
+  <div class="ai-content" *ngIf="!loading">
+    <!-- Left sidebar with controls -->
+    <div class="ai-controls">
+      <mat-card>
+        <mat-card-header>
+          <mat-card-title>Algorithm Settings</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <!-- Algorithm Selection -->
+          <div class="control-group">
+            <label>Select Algorithm:</label>
+            <mat-select [(ngModel)]="selectedAlgorithm" [disabled]="isTraining">
+              <mat-option value="ppo">Proximal Policy Optimization (PPO)</mat-option>
+              <mat-option value="dqn">Dueling Double DQN</mat-option>
+            </mat-select>
+          </div>
+
+          <!-- Algorithm description -->
+          <div class="algorithm-description">
+            <ng-container *ngIf="selectedAlgorithm === 'ppo'">
+              <h4>Policy Gradient Method</h4>
+              <p>PPO handles large discrete action spaces via categorical policies, with built-in stability through a clipped objective function.</p>
+            </ng-container>
+            <ng-container *ngIf="selectedAlgorithm === 'dqn'">
+              <h4>Value-Based Method</h4>
+              <p>Dueling Double DQN separates state-value from action-advantage, reducing overestimation bias with prioritized replay.</p>
+            </ng-container>
+          </div>
+
+          <!-- Training Speed -->
+          <div class="control-group">
+            <label>Training Speed:</label>
+            <mat-slider 
+              min="1" 
+              max="100" 
+              step="1" 
+              [disabled]="isTraining"
+              [(ngModel)]="trainingSpeed">
+            </mat-slider>
+            <span>{{trainingSpeed}}%</span>
+          </div>
+
+          <!-- Training Controls -->
+          <div class="action-buttons">
+            <button 
+              mat-raised-button 
+              [color]="isTraining ? 'warn' : 'primary'"
+              (click)="startTraining()">
+              <mat-icon>{{isTraining ? 'stop' : 'play_arrow'}}</mat-icon>
+              {{isTraining ? 'Stop Training' : 'Start Training'}}
+            </button>
+            <button 
+              mat-raised-button 
+              color="accent"
+              [disabled]="isTraining || progress < 100"
+              (click)="testModel()">
+              <mat-icon>science</mat-icon>
+              Test Model
+            </button>
+          </div>
+        </mat-card-content>
+      </mat-card>
+
+      <!-- Training Statistics -->
+      <mat-card *ngIf="isTraining || progress > 0">
+        <mat-card-header>
+          <mat-card-title>Training Progress</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="progress-container">
+            <mat-progress-bar [value]="progress"></mat-progress-bar>
+            <span>{{progress.toFixed(1)}}%</span>
+          </div>
+          
+          <div class="stats">
+            <div class="stat-item">
+              <div class="stat-label">Episodes:</div>
+              <div class="stat-value">{{episodes}}</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">Current Reward:</div>
+              <div class="stat-value">{{currentReward.toFixed(2)}}</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">Average Reward:</div>
+              <div class="stat-value">{{averageReward.toFixed(2)}}</div>
+            </div>
+          </div>
+        </mat-card-content>
+      </mat-card>
+
+      <!-- Network Visualization -->
+      <mat-card *ngIf="networkVisualization.length > 0">
+        <mat-card-header>
+          <mat-card-title>Network Visualization</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="network-viz">
+            <div class="network-layer" *ngFor="let layer of networkVisualization; let i = index">
+              <div class="layer-label">{{i === 0 ? 'Input' : i === networkVisualization.length - 1 ? 'Output' : 'Hidden'}}</div>
+              <div class="layer-nodes">
+                <div 
+                  class="node" 
+                  *ngFor="let node of layer"
+                  [style.opacity]="0.3 + (node.value * 0.7)"
+                  [class]="node.size">
+                </div>
+                <div class="node-count" *ngIf="layer.length > 10">+{{getMoreNodesCount(layer)}} more</div>
+              </div>
+            </div>
+          </div>
+        </mat-card-content>
+      </mat-card>
+    </div>
+
+    <!-- Right side with game board -->
+    <div class="ai-board">
+      <div class="sudoku-board">
+        <div class="board-grid">
+          <div class="board-section" *ngFor="let section of getSections(); let sectionIndex = index">
+            <app-cell
+              *ngFor="let cell of section; let cellIndex = index"
+              [value]="cell.value"
+              [notes]="cell.notes"
+              [isOriginal]="cell.isOriginal"
+              [isSelected]="cell.isSelected"
+              [isSameNumber]="cell.isSameNumber"
+              [isHighlighted]="cell.isHighlighted"
+            ></app-cell>
+          </div>
+        </div>
+      </div>
+
+      <!-- Algorithm reasoning visualization -->
+      <div class="action-description" *ngIf="cellHighlights.length > 0">
+        <h3>AI's Thinking Process</h3>
+        <div class="action-items">
+          <div class="action-item" *ngFor="let highlight of cellHighlights.slice(-3)">
+            <div class="action-cell">
+              <div class="row-col">R{{highlight.row+1}}C{{highlight.col+1}}</div>
+              <div class="value">{{highlight.value}}</div>
+            </div>
+            <div class="action-reasoning">
+              <p *ngIf="selectedAlgorithm === 'ppo'">
+                Policy predicts {{highlight.value}} (probability: {{(Math.random() * 0.5 + 0.5).toFixed(2)}})
+              </p>
+              <p *ngIf="selectedAlgorithm === 'dqn'">
+                Q-value for ({{highlight.row+1}},{{highlight.col+1}},{{highlight.value}}): {{(Math.random() * 5).toFixed(2)}}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -19,6 +19,10 @@ export class MenuComponent {
     this.router.navigate(['/game']);
   }
 
+  watchAiLearn(): void {
+    this.router.navigate(['/ai-learning']);
+  }
+
   goToSettings(): void {
     this.router.navigate(['/settings']);
   }
