@@ -81,7 +81,7 @@
   100% { transform: rotate(360deg); }
 }
 
-/* Board Styling */
+/* Board Styling - Complete redesign for proper 3x3 sections */
 .board-container {
   display: flex;
   justify-content: center;
@@ -95,47 +95,38 @@
   background: white;
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
   padding: 8px;
   display: flex;
   flex-direction: column;
 }
 
 .board-grid {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 6px;
   width: 100%;
   flex: 1;
-  border: 4px solid #1f2937;
+  border: 3px solid #1f2937;
   border-radius: 8px;
-  overflow: hidden;
+  padding: 6px;
   background: #1f2937;
-  gap: 2px;
+  box-sizing: border-box;
 }
 
-.board-row {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  gap: 2px;
+.board-section {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 1px;
+  background: #374151;
+  border-radius: 4px;
+  padding: 1px;
 }
 
-.board-row app-cell {
-  flex: 1;
-  border: 1px solid #d1d5db;
-  min-width: 0;
+.board-section app-cell {
   background: white;
-}
-
-/* Add thick borders for 3x3 sections - much more prominent */
-.board-row:nth-child(3),
-.board-row:nth-child(6) {
-  margin-bottom: 4px;
-}
-
-.board-row app-cell:nth-child(3),
-.board-row app-cell:nth-child(6) {
-  margin-right: 4px;
+  border: none;
 }
 
 /* Controls Panel */

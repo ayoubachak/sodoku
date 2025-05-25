@@ -37,16 +37,16 @@
   <div class="board-container" *ngIf="!loading">
     <div class="sudoku-board">
       <div class="board-grid">
-        <div class="board-row" *ngFor="let row of board; let i = index">
+        <div class="board-section" *ngFor="let section of getSections(); let sectionIndex = index">
           <app-cell
-            *ngFor="let cell of row; let j = index"
-            [value]="cell"
-            [notes]="notes[i][j]"
-            [isOriginal]="isOriginal(i, j)"
-            [isSelected]="isSelected(i, j)"
-            [isSameNumber]="isSameNumber(i, j)"
-            [isHighlighted]="isHighlighted(i, j)"
-            (cellClick)="selectCell(i, j)"
+            *ngFor="let cell of section; let cellIndex = index"
+            [value]="cell.value"
+            [notes]="cell.notes"
+            [isOriginal]="cell.isOriginal"
+            [isSelected]="cell.isSelected"
+            [isSameNumber]="cell.isSameNumber"
+            [isHighlighted]="cell.isHighlighted"
+            (cellClick)="selectCell(cell.row, cell.col)"
           ></app-cell>
         </div>
       </div>

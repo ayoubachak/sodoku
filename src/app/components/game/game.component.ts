@@ -339,4 +339,37 @@ export class GameComponent implements OnInit {
   newGame(): void {
     this.loadNewGame();
   }
+
+  // Get board organized into 3x3 sections for proper display
+  getSections(): any[] {
+    const sections = [];
+    
+    for (let sectionRow = 0; sectionRow < 3; sectionRow++) {
+      for (let sectionCol = 0; sectionCol < 3; sectionCol++) {
+        const section = [];
+        
+        for (let cellRow = 0; cellRow < 3; cellRow++) {
+          for (let cellCol = 0; cellCol < 3; cellCol++) {
+            const row = sectionRow * 3 + cellRow;
+            const col = sectionCol * 3 + cellCol;
+            
+            section.push({
+              value: this.board[row][col],
+              notes: this.notes[row][col],
+              isOriginal: this.isOriginal(row, col),
+              isSelected: this.isSelected(row, col),
+              isSameNumber: this.isSameNumber(row, col),
+              isHighlighted: this.isHighlighted(row, col),
+              row: row,
+              col: col
+            });
+          }
+        }
+        
+        sections.push(section);
+      }
+    }
+    
+    return sections;
+  }
 }
