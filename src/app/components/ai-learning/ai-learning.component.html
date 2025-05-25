@@ -179,12 +179,42 @@
 
           <!-- Accuracy Chart -->
           <div class="chart-container">
-            <canvas id="accuracyChart"></canvas>
+            <ngx-charts-line-chart
+              [view]="[500, 200]"
+              [scheme]="colorScheme"
+              [results]="accuracyChartData"
+              [gradient]="true"
+              [xAxis]="showXAxis"
+              [yAxis]="showYAxis"
+              [legend]="false"
+              [showXAxisLabel]="false"
+              [showYAxisLabel]="false"
+              [xAxisLabel]="xAxisLabel"
+              [yAxisLabel]="yAxisLabelAccuracy"
+              [autoScale]="true"
+              [timeline]="false"
+              [animations]="false">
+            </ngx-charts-line-chart>
           </div>
 
           <!-- Reward Chart -->
           <div class="chart-container">
-            <canvas id="rewardChart"></canvas>
+            <ngx-charts-line-chart
+              [view]="[500, 200]"
+              [scheme]="colorScheme"
+              [results]="rewardChartData"
+              [gradient]="true"
+              [xAxis]="showXAxis"
+              [yAxis]="showYAxis"
+              [legend]="false"
+              [showXAxisLabel]="false"
+              [showYAxisLabel]="false"
+              [xAxisLabel]="xAxisLabel"
+              [yAxisLabel]="yAxisLabelReward"
+              [autoScale]="true"
+              [timeline]="false"
+              [animations]="false">
+            </ngx-charts-line-chart>
           </div>
         </mat-card-content>
       </mat-card>

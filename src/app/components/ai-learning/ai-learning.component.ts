@@ -11,7 +11,9 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { FormsModule } from '@angular/forms';
 import { CellComponent } from '../cell/cell.component';
 import { SudokuService } from '../../services/sudoku.service';
-import Chart from 'chart.js/auto';
+
+// Import ngx-charts modules, remove unsupported imports
+import { NgxChartsModule, Color, ScaleType } from '@swimlane/ngx-charts';
 
 interface ModelData {
   algorithm: 'ppo' | 'dqn';
@@ -42,6 +44,7 @@ interface ModelData {
     MatProgressBarModule,
     MatSliderModule,
     FormsModule,
+    NgxChartsModule,
     CellComponent
   ],
   templateUrl: './ai-learning.component.html',
@@ -82,13 +85,30 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
   correctCells = 0;
   totalTestCells = 0;
   
-  // Chart related
-  accuracyChart: Chart | null = null;
-  rewardChart: Chart | null = null;
-  accuracyHistory: number[] = [];
-  rewardHistory: number[] = [];
-  episodeLabels: number[] = [];
+  // Chart data for ngx-charts
+  accuracyChartData: any[] = [];
+  rewardChartData: any[] = [];
   
+  // Chart configuration
+  colorScheme: string | Color = 'cool';
+  // curve: CurveFactory = curveMonotoneX;
+  
+  // Chart options
+  showXAxis = true;
+  showYAxis = true;
+  gradient = false;
+  showLegend = true;
+  showXAxisLabel = true;
+  xAxisLabel = 'Episode';
+  showYAxisLabel = true;
+  yAxisLabelAccuracy = 'Accuracy (%)';
+  yAxisLabelReward = 'Reward';
+  autoScale = true;
+  
+  // Pre-calculated random values for thinking process visualization
+  thinkingProbabilities: number[] = [];
+  thinkingQValues: number[] = [];
+
   // Visualizations
   cellHighlights: { row: number, col: number, value: number }[] = [];
   networkVisualization: any[] = [];
@@ -105,10 +125,6 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
     isHighlighted: boolean;
   }[][] = [];
 
-  // Pre-calculated random values for thinking process visualization
-  thinkingProbabilities: number[] = [];
-  thinkingQValues: number[] = [];
-
   constructor(
     private router: Router,
     private sudokuService: SudokuService,
@@ -117,6 +133,10 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
   ) {
     // Pre-generate random values for thinking visualization
     this.generateRandomThinkingValues();
+    
+    // Initialize chart data
+    this.accuracyChartData = [{ name: 'Accuracy', series: [] }];
+    this.rewardChartData = [{ name: 'Reward', series: [] }];
   }
 
   // Generate fixed random values to avoid ExpressionChangedAfterItHasBeenCheckedError
@@ -146,14 +166,11 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
   ngAfterViewInit(): void {
     // Create charts with a slight delay to ensure DOM elements are ready
     setTimeout(() => {
-      this.initializeCharts();
       this.cdr.detectChanges();
     }, 100);
   }
   
   ngOnDestroy(): void {
-    // Cleanup charts when component is destroyed
-    this.destroyCharts();
     if (this.isTraining) {
       this.stopTraining();
     }
@@ -222,12 +239,12 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
     this.isTraining = true;
     this.progress = 0;
     this.episodes = 0;
-    this.accuracyHistory = [];
-    this.rewardHistory = [];
-    this.episodeLabels = [];
     this.accuracy = 0;
+    this.averageReward = 0;
     
-    this.resetCharts();
+    // Reset chart data
+    this.accuracyChartData = [{ name: 'Accuracy', series: [] }];
+    this.rewardChartData = [{ name: 'Reward', series: [] }];
     
     // Simulate training with intervals
     this.trainWithAlgorithm();
@@ -293,7 +310,7 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
       // Generate fake network visualization data
       this.generateNetworkVisualization();
       
-      // Update charts
+      // Update chart data
       if (this.episodes % 5 === 0) {
         this.updateCharts();
       }
@@ -313,121 +330,29 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
     // Start training loop
     trainingStep();
   }
-
-  initializeCharts(): void {
-    // Setup chart contexts
-    const accuracyCtx = document.getElementById('accuracyChart') as HTMLCanvasElement;
-    const rewardCtx = document.getElementById('rewardChart') as HTMLCanvasElement;
-    
-    if (!accuracyCtx || !rewardCtx) {
-      console.warn('Chart canvases not found in DOM. Charts will not be initialized.');
-      return;
-    }
-    
-    // Create charts
-    this.accuracyChart = new Chart(accuracyCtx, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          label: 'Accuracy %',
-          data: [],
-          borderColor: 'rgba(75, 192, 192, 1)',
-          backgroundColor: 'rgba(75, 192, 192, 0.2)',
-          tension: 0.4,
-          fill: true
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          y: {
-            beginAtZero: true,
-            max: 100
-          }
-        }
-      }
-    });
-    
-    this.rewardChart = new Chart(rewardCtx, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          label: 'Average Reward',
-          data: [],
-          borderColor: 'rgba(153, 102, 255, 1)',
-          backgroundColor: 'rgba(153, 102, 255, 0.2)',
-          tension: 0.4,
-          fill: true
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          y: {
-            beginAtZero: false
-          }
-        }
-      }
-    });
-  }
   
   updateCharts(): void {
-    if (!this.accuracyChart || !this.rewardChart) {
-      console.warn('Charts not initialized. Cannot update.');
-      return;
-    }
+    // Add new data points to the charts
+    this.accuracyChartData[0].series.push({
+      name: this.episodes.toString(),
+      value: this.accuracy
+    });
     
-    // Add data points
-    this.episodeLabels.push(this.episodes);
-    this.accuracyHistory.push(this.accuracy);
-    this.rewardHistory.push(this.averageReward);
+    this.rewardChartData[0].series.push({
+      name: this.episodes.toString(),
+      value: this.averageReward
+    });
     
     // Limit chart data points for performance
-    const maxDataPoints = 50;
-    if (this.episodeLabels.length > maxDataPoints) {
-      this.episodeLabels = this.episodeLabels.slice(-maxDataPoints);
-      this.accuracyHistory = this.accuracyHistory.slice(-maxDataPoints);
-      this.rewardHistory = this.rewardHistory.slice(-maxDataPoints);
+    const maxDataPoints = 30;
+    if (this.accuracyChartData[0].series.length > maxDataPoints) {
+      this.accuracyChartData[0].series = this.accuracyChartData[0].series.slice(-maxDataPoints);
+      this.rewardChartData[0].series = this.rewardChartData[0].series.slice(-maxDataPoints);
     }
     
-    // Update charts
-    this.accuracyChart.data.labels = this.episodeLabels;
-    this.accuracyChart.data.datasets[0].data = this.accuracyHistory;
-    this.accuracyChart.update();
-    
-    this.rewardChart.data.labels = this.episodeLabels;
-    this.rewardChart.data.datasets[0].data = this.rewardHistory;
-    this.rewardChart.update();
-  }
-  
-  resetCharts(): void {
-    if (this.accuracyChart) {
-      this.accuracyChart.data.labels = [];
-      this.accuracyChart.data.datasets[0].data = [];
-      this.accuracyChart.update();
-    }
-    
-    if (this.rewardChart) {
-      this.rewardChart.data.labels = [];
-      this.rewardChart.data.datasets[0].data = [];
-      this.rewardChart.update();
-    }
-  }
-  
-  destroyCharts(): void {
-    if (this.accuracyChart) {
-      this.accuracyChart.destroy();
-      this.accuracyChart = null;
-    }
-    
-    if (this.rewardChart) {
-      this.rewardChart.destroy();
-      this.rewardChart = null;
-    }
+    // Create new array references to trigger Angular change detection
+    this.accuracyChartData = [...this.accuracyChartData];
+    this.rewardChartData = [...this.rewardChartData];
   }
 
   generateNetworkVisualization(): void {
@@ -633,11 +558,16 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
         // Generate visualization based on loaded model
         this.generateNetworkVisualization();
         
-        // Update chart data
-        this.accuracyHistory = [this.accuracy];
-        this.rewardHistory = [this.averageReward];
-        this.episodeLabels = [this.episodes]; 
-        this.updateCharts();
+        // Setup chart data for loaded model
+        this.accuracyChartData = [{
+          name: 'Accuracy', 
+          series: [{ name: this.episodes.toString(), value: this.accuracy }]
+        }];
+        
+        this.rewardChartData = [{
+          name: 'Reward',
+          series: [{ name: this.episodes.toString(), value: this.averageReward }]
+        }];
         
         this.snackBar.open('Model loaded successfully!', 'Close', {
           duration: 3000
