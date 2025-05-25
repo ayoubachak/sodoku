@@ -76,9 +76,9 @@
                 <span>Discount Factor:</span>
                 <div class="slider-with-value">
                   <mat-slider min="0.9" max="0.99" step="0.01" [disabled]="isTraining">
-                    <input matSliderThumb [(ngModel)]="discountFactor">
+                    <input matSliderThumb [(ngModel)]="gamma">
                   </mat-slider>
-                  <span>{{discountFactor.toFixed(2)}}</span>
+                  <span>{{gamma.toFixed(2)}}</span>
                 </div>
               </div>
             </div>

@@ -1,20 +1,20 @@
-import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
-import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSelectModule } from '@angular/material/select';
+import { MatCardModule } from '@angular/material/card';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSliderModule } from '@angular/material/slider';
+import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { FormsModule } from '@angular/forms';
-import { CellComponent } from '../cell/cell.component';
-import { SudokuService } from '../../services/sudoku.service';
-import { PPOAgentService, PPOConfig, TrainingStep } from '../../services/ppo-agent.service';
+import { NgxChartsModule, Color } from '@swimlane/ngx-charts';
 
-// Import ngx-charts modules, remove unsupported imports
-import { NgxChartsModule, Color, ScaleType } from '@swimlane/ngx-charts';
+import { SudokuService } from '../../services/sudoku.service';
+import { CellComponent } from '../cell/cell.component';
+import { PPOAgentService, PPOConfig, TrainingStep } from '../../services/ppo-agent.service';
+import { DQNAgentService, DQNConfig, Experience } from '../../services/dqn-agent.service';
 
 interface ModelData {
   algorithm: 'ppo' | 'dqn';
@@ -23,7 +23,10 @@ interface ModelData {
     learningRate: number;
     batchSize: number;
     entropyCoef?: number;
-    discountFactor?: number;
+    gamma?: number; // Use gamma for both PPO and DQN
+    epsilon?: number;
+    epsilonDecay?: number;
+    targetUpdateFreq?: number;
   };
   stats: {
     accuracy: number;
@@ -51,7 +54,7 @@ interface ModelData {
   templateUrl: './ai-learning.component.html',
   styleUrl: './ai-learning.component.css'
 })
-export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
+export class AiLearningComponent implements OnInit, OnDestroy {
   // Make Math available in template
   Math = Math;
   
@@ -72,7 +75,10 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
   learningRate = 0.0003;
   batchSize = 64;
   entropyCoef = 0.01;
-  discountFactor = 0.99;
+  gamma = 0.99; // Changed from discountFactor to gamma to match DQN config
+  epsilon = 1.0; // DQN exploration rate
+  epsilonDecay = 0.995; // DQN epsilon decay
+  targetUpdateFreq = 100; // DQN target network update frequency
   
   // Training stats
   currentReward = 0;
@@ -81,6 +87,8 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
   actorLoss = 0;
   criticLoss = 0;
   avgAdvantage = 0;
+  qValue = 0; // DQN Q-value
+  explorationRate = 0; // DQN exploration rate
   
   // Episode tracking
   currentEpisodeSteps: TrainingStep[] = [];
@@ -146,11 +154,11 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
   networkArchitecture: {name: string, units: number}[] = [];
 
   constructor(
-    private router: Router,
-    private sudokuService: SudokuService,
-    private snackBar: MatSnackBar,
-    private cdr: ChangeDetectorRef,
-    private ppoAgent: PPOAgentService
+    private readonly router: Router,
+    private readonly sudokuService: SudokuService,
+    private readonly snackBar: MatSnackBar,
+    private readonly ppoAgent: PPOAgentService,
+    private readonly dqnAgent: DQNAgentService
   ) {
     // Pre-generate random values for thinking visualization
     this.generateRandomThinkingValues();
@@ -186,14 +194,9 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
     // Initialize PPO agent when PPO is selected
     if (this.selectedAlgorithm === 'ppo') {
       await this.initializePPOAgent();
+    } else if (this.selectedAlgorithm === 'dqn') {
+      await this.initializeDQNAgent();
     }
-  }
-  
-  ngAfterViewInit(): void {
-    // Create charts with a slight delay to ensure DOM elements are ready
-    setTimeout(() => {
-      this.cdr.detectChanges();
-    }, 100);
   }
   
   ngOnDestroy(): void {
@@ -201,8 +204,9 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
       this.stopTraining();
     }
     
-    // Dispose of PPO agent resources
+    // Dispose of agent resources
     this.ppoAgent.dispose();
+    this.dqnAgent.dispose();
   }
 
   private async initializePPOAgent(): Promise<void> {
@@ -216,6 +220,20 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
     console.log('PPO Agent initialized');
   }
 
+  private async initializeDQNAgent(): Promise<void> {
+    const config: Partial<DQNConfig> = {
+      learningRate: this.learningRate,
+      batchSize: this.batchSize,
+      gamma: this.gamma, // Use gamma instead of discountFactor
+      epsilon: this.epsilon,
+      epsilonDecay: this.epsilonDecay,
+      targetUpdateFreq: this.targetUpdateFreq
+    };
+    
+    await this.dqnAgent.initialize(config);
+    console.log('DQN Agent initialized');
+  }
+
   private initializeBoard(): void {
     this.loading = true;
     this.sudokuService.getNewBoard().subscribe(boardData => {
@@ -224,7 +242,6 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
       this.currentTrainingBoard = JSON.parse(JSON.stringify(boardData.grid));
       this.initializeCellData();
       this.loading = false;
-      this.cdr.detectChanges();
     });
   }
 
@@ -283,6 +300,8 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
     // Initialize PPO agent if not already done or if algorithm changed
     if (this.selectedAlgorithm === 'ppo') {
       await this.initializePPOAgent();
+    } else if (this.selectedAlgorithm === 'dqn') {
+      await this.initializeDQNAgent();
     }
     
     this.isTraining = true;
@@ -327,8 +346,7 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
     if (this.selectedAlgorithm === 'ppo') {
       await this.trainPPO();
     } else {
-      // Fallback to simulation for DQN (to be implemented later)
-      this.trainWithAlgorithm();
+      await this.trainDQN();
     }
   }
 
@@ -438,6 +456,109 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
+  private async trainDQN(): Promise<void> {
+    const maxEpisodes = 1000;
+    let episodeRewards: number[] = [];
+    
+    while (this.isTraining && this.episodes < maxEpisodes) {
+      // Start new episode
+      this.currentTrainingBoard = JSON.parse(JSON.stringify(this.board));
+      let episodeReward = 0;
+      let stepCount = 0;
+      const maxStepsPerEpisode = 100;
+      
+      // Run episode
+      while (this.isTraining && stepCount < maxStepsPerEpisode) {
+        try {
+          // Get action from DQN agent
+          const { action, qValue } = await this.dqnAgent.selectAction(this.currentTrainingBoard);
+          
+          // Apply action and get reward
+          const result = this.dqnAgent.applyAction(this.currentTrainingBoard, action);
+          
+          // Store experience in replay buffer
+          const experience: Experience = {
+            state: this.boardToState(this.currentTrainingBoard),
+            action: action,
+            reward: result.reward,
+            nextState: this.boardToState(result.newBoard),
+            done: result.done
+          };
+          
+          this.dqnAgent.storeExperience(experience);
+          
+          // Update visualization
+          this.updateVisualization(action, result.reward);
+          this.qValue = qValue;
+          
+          // Update board
+          this.currentTrainingBoard = result.newBoard;
+          episodeReward += result.reward;
+          stepCount++;
+          this.totalSteps++;
+          
+          // Check if episode is done
+          if (result.done) {
+            this.accuracy = 100; // Solved the puzzle
+            break;
+          }
+          
+          // Check if no valid moves left
+          const validActions = this.getValidActions(this.currentTrainingBoard);
+          if (validActions.length === 0) {
+            break;
+          }
+          
+        } catch (error) {
+          console.error('Error during DQN training step:', error);
+          break;
+        }
+        
+        // Small delay for visualization
+        await new Promise(resolve => setTimeout(resolve, Math.max(10, 1000 - this.trainingSpeed * 10)));
+      }
+      
+      // Episode finished
+      episodeRewards.push(episodeReward);
+      this.episodes++;
+      
+      // Calculate running averages
+      this.currentReward = episodeReward;
+      this.averageReward = episodeRewards.reduce((a, b) => a + b, 0) / episodeRewards.length;
+      
+      // Calculate accuracy (percentage of cells correctly filled)
+      this.accuracy = this.calculateAccuracy();
+      
+      // Train the DQN agent
+      if (this.dqnAgent.getTrainingStats().bufferSize >= this.batchSize) {
+        const trainingResult = await this.dqnAgent.train();
+        this.qValue = trainingResult.qValue;
+        this.explorationRate = trainingResult.epsilon;
+      }
+      
+      // Update progress
+      this.progress = Math.min(100, (this.episodes / maxEpisodes) * 100);
+      
+      // Update charts every 5 episodes
+      if (this.episodes % 5 === 0) {
+        this.updateCharts();
+      }
+      
+      // Reset board for next episode
+      if (this.isTraining) {
+        this.initializeBoard();
+        await new Promise(resolve => setTimeout(resolve, 100)); // Wait for board initialization
+      }
+    }
+    
+    // Training complete
+    if (this.isTraining) {
+      this.progress = 100;
+      this.isTraining = false;
+      this.snackBar.open('DQN Training complete!', 'Close', { duration: 3000 });
+    }
+  }
+
   private boardToState(board: number[][]): number[] {
     const state: number[] = [];
     for (let i = 0; i < 9; i++) {
@@ -504,8 +625,6 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
     
     // Add to highlights array for template
     this.cellHighlights = [{ row, col, value }];
-    
-    this.cdr.detectChanges();
   }
 
   private calculateAccuracy(): number {
@@ -597,7 +716,7 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
     // Simple array of "activation" values for visualization
     const layerSizes = this.selectedAlgorithm === 'ppo' 
       ? [81, 256, 128, 64, 729] // Updated to match PPO architecture
-      : [81, 64, 32, 729];
+      : [81, 128, 64, 729];
       
     this.networkVisualization = [];
     
@@ -621,6 +740,8 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
   async testModel(): Promise<void> {
     if (this.selectedAlgorithm === 'ppo') {
       await this.testPPOModel();
+    } else if (this.selectedAlgorithm === 'dqn') {
+      await this.testDQNModel();
     } else {
       this.testSimulatedModel();
     }
@@ -663,118 +784,91 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
+  private async testDQNModel(): Promise<void> {
+    // Reset highlights
+    this.resetHighlights();
+    
+    // Test the DQN model on current board
+    const testBoard = JSON.parse(JSON.stringify(this.board));
+    let step = 0;
+    const maxSteps = 50;
+    
+    try {
+      while (step < maxSteps) {
+        const validActions = this.getValidActions(testBoard);
+        if (validActions.length === 0) break;
+        
+        const { action, qValue } = await this.dqnAgent.selectAction(testBoard);
+        const result = this.dqnAgent.applyAction(testBoard, action);
+        
+        // Update visualization
+        this.updateVisualization(action, result.reward);
+        this.qValue = qValue;
+        
+        testBoard.splice(0, testBoard.length, ...result.newBoard);
+        step++;
+        
+        if (result.done) {
+          this.snackBar.open('DQN Agent solved the puzzle!', 'Close', { duration: 3000 });
+          break;
+        }
+        
+        // Delay for visualization
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+    } catch (error) {
+      console.error('Error testing DQN model:', error);
+      this.snackBar.open('Error testing model', 'Close', { duration: 3000 });
+    }
+  }
+
   private testSimulatedModel(): void {
-    // Simulate testing the model on the current board
+    // Reset highlights
     this.resetHighlights();
     
-    // Highlight a sequence of moves to simulate the model solving the puzzle
-    let emptyCells = [];
-    for (let row = 0; row < 9; row++) {
-      for (let col = 0; col < 9; col++) {
-        if (this.board[row][col] === 0) {
-          emptyCells.push({ row, col, value: this.solution[row][col] });
-        }
+    // Simulate testing the model
+    let step = 0;
+    const maxSteps = 10;
+    
+    const testStep = () => {
+      if (step >= maxSteps) {
+        this.snackBar.open('Simulated model test complete!', 'Close', { duration: 3000 });
+        return;
       }
-    }
-    
-    // Shuffle the empty cells to simulate non-linear solving
-    emptyCells = this.shuffleArray(emptyCells);
-    
-    let cellIndex = 0;
-    const solveStep = () => {
-      if (cellIndex < emptyCells.length) {
-        const { row, col, value } = emptyCells[cellIndex];
-        
-        // Clear previous highlights
-        this.resetHighlights();
-        
-        // Highlight current cell
-        this.cellData[row][col].isHighlighted = true;
-        this.cellData[row][col].value = value;
-        this.cellHighlights = [{ row, col, value }];
-        
-        cellIndex++;
-        
-        if (cellIndex < emptyCells.length) {
-          setTimeout(solveStep, 200);
-        }
-      }
-    };
-    
-    solveStep();
-  }
-  
-  generateNewSudoku(): void {
-    this.initializeBoard();
-  }
-  
-  testOnCurrentBoard(): void {
-    // Simulate testing the trained model on the current board
-    this.showModelPerformance = true;
-    this.resetHighlights();
-    
-    // Start with all empty cells
-    this.totalTestCells = 0;
-    this.correctCells = 0;
-    
-    let emptyCells = [];
-    for (let row = 0; row < 9; row++) {
-      for (let col = 0; col < 9; col++) {
-        if (this.board[row][col] === 0) {
-          emptyCells.push({ row, col, value: this.solution[row][col] });
-          this.totalTestCells++;
-        }
-      }
-    }
-    
-    // Simulate the actual testing
-    const startTime = performance.now();
-    
-    // Shuffle the empty cells
-    emptyCells = this.shuffleArray(emptyCells);
-    
-    // Process cells with a delay to visualize the process
-    let processedCells = 0;
-    const processCell = () => {
-      if (processedCells < emptyCells.length) {
-        const { row, col, value } = emptyCells[processedCells];
-        
-        // Simulate model prediction (80% accuracy)
-        const isCorrect = Math.random() < 0.8;
-        if (isCorrect) {
-          this.correctCells++;
-          this.cellData[row][col].value = value;
-        } else {
-          // Wrong prediction
-          this.cellData[row][col].value = Math.floor(Math.random() * 9) + 1;
-        }
-        
-        this.cellData[row][col].isHighlighted = true;
-        
-        processedCells++;
-        this.testAccuracy = (this.correctCells / processedCells) * 100;
-        
-        setTimeout(() => {
-          this.cellData[row][col].isHighlighted = false;
-          if (processedCells < emptyCells.length) {
-            setTimeout(processCell, 100);
-          } else {
-            // Testing complete
-            this.testTime = performance.now() - startTime;
-            this.snackBar.open(`Testing complete! Accuracy: ${this.testAccuracy.toFixed(1)}%`, 'Close', {
-              duration: 5000
-            });
+      
+      // Simulate making a move
+      const emptyCells = [];
+      for (let row = 0; row < 9; row++) {
+        for (let col = 0; col < 9; col++) {
+          if (this.cellData[row][col].value === 0) {
+            emptyCells.push({ row, col });
           }
-        }, 300);
+        }
       }
+      
+      if (emptyCells.length > 0) {
+        const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+        const randomValue = Math.floor(Math.random() * 9) + 1;
+        
+        // Update visualization
+        this.resetHighlights();
+        this.cellData[randomCell.row][randomCell.col].isHighlighted = true;
+        this.cellData[randomCell.row][randomCell.col].value = randomValue;
+        this.cellHighlights = [{ row: randomCell.row, col: randomCell.col, value: randomValue }];
+      }
+      
+      step++;
+      setTimeout(testStep, 500);
     };
     
-    processCell();
+    testStep();
   }
-  
+
   async saveModel(): Promise<void> {
     if (this.selectedAlgorithm === 'ppo') {
       await this.savePPOModel();
+    } else if (this.selectedAlgorithm === 'dqn') {
+      await this.saveDQNModel();
     } else {
       this.saveSimulatedModel();
     }
@@ -812,6 +906,41 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
+  private async saveDQNModel(): Promise<void> {
+    try {
+      const weights = await this.dqnAgent.exportWeights();
+      const config = this.dqnAgent.getConfig();
+      
+      const modelData: ModelData = {
+        algorithm: this.selectedAlgorithm,
+        weights: weights,
+        configuration: {
+          learningRate: config.learningRate,
+          batchSize: config.batchSize,
+          gamma: config.gamma,
+          epsilon: config.epsilon,
+          epsilonDecay: config.epsilonDecay,
+          targetUpdateFreq: config.targetUpdateFreq
+        },
+        stats: {
+          accuracy: this.accuracy,
+          averageReward: this.averageReward,
+          episodes: this.episodes
+        },
+        timestamp: Date.now()
+      };
+      
+      localStorage.setItem('sudoku_ai_model', JSON.stringify(modelData));
+      
+      this.snackBar.open('DQN Model saved successfully!', 'Close', {
+        duration: 3000
+      });
+    } catch (error) {
+      console.error('Error saving DQN model:', error);
+      this.snackBar.open('Error saving model', 'Close', { duration: 3000 });
+    }
+  }
+
   private saveSimulatedModel(): void {
     // Simulate saving the model to localStorage
     const modelData: ModelData = {
@@ -820,7 +949,7 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
       configuration: {
         learningRate: this.learningRate,
         batchSize: this.batchSize,
-        ...(this.selectedAlgorithm === 'ppo' ? { entropyCoef: this.entropyCoef } : { discountFactor: this.discountFactor })
+        ...(this.selectedAlgorithm === 'ppo' ? { entropyCoef: this.entropyCoef } : { gamma: this.gamma })
       },
       stats: {
         accuracy: this.accuracy,
@@ -840,6 +969,8 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
   async loadModel(): Promise<void> {
     if (this.selectedAlgorithm === 'ppo') {
       await this.loadPPOModel();
+    } else if (this.selectedAlgorithm === 'dqn') {
+      await this.loadDQNModel();
     } else {
       this.loadSimulatedModel();
     }
@@ -892,91 +1023,268 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
+  private async loadDQNModel(): Promise<void> {
+    try {
+      const savedModel = localStorage.getItem('sudoku_ai_model');
+      
+      if (savedModel) {
+        const modelData: ModelData = JSON.parse(savedModel);
+        
+        if (modelData.algorithm === 'dqn' && modelData.weights) {
+          // Initialize DQN agent first
+          await this.initializeDQNAgent();
+          
+          // Load weights
+          await this.dqnAgent.importWeights(modelData.weights);
+          
+          // Apply saved settings
+          this.learningRate = modelData.configuration.learningRate;
+          this.batchSize = modelData.configuration.batchSize;
+          if (modelData.configuration.gamma) {
+            this.gamma = modelData.configuration.gamma;
+          }
+          if (modelData.configuration.epsilon) {
+            this.epsilon = modelData.configuration.epsilon;
+          }
+          if (modelData.configuration.epsilonDecay) {
+            this.epsilonDecay = modelData.configuration.epsilonDecay;
+          }
+          if (modelData.configuration.targetUpdateFreq) {
+            this.targetUpdateFreq = modelData.configuration.targetUpdateFreq;
+          }
+          
+          // Apply saved stats
+          this.accuracy = modelData.stats.accuracy;
+          this.averageReward = modelData.stats.averageReward;
+          this.episodes = modelData.stats.episodes;
+          this.progress = 100; // Assume a loaded model is fully trained
+          
+          // Update charts
+          this.updateChartsFromLoadedModel();
+          
+          this.snackBar.open('DQN Model loaded successfully!', 'Close', {
+            duration: 3000
+          });
+        } else {
+          throw new Error('Invalid DQN model data');
+        }
+      } else {
+        this.snackBar.open('No saved DQN model found!', 'Close', {
+          duration: 3000
+        });
+      }
+    } catch (error) {
+      console.error('Error loading DQN model:', error);
+      this.snackBar.open('Failed to load model', 'Close', { duration: 3000 });
+    }
+  }
+
   private loadSimulatedModel(): void {
-    // Simulate loading the model from localStorage
-    const savedModel = localStorage.getItem('sudoku_ai_model');
-    
-    if (savedModel) {
-      try {
+    try {
+      const savedModel = localStorage.getItem('sudoku_ai_model');
+      
+      if (savedModel) {
         const modelData: ModelData = JSON.parse(savedModel);
         
         // Apply saved settings
-        this.selectedAlgorithm = modelData.algorithm;
         this.learningRate = modelData.configuration.learningRate;
         this.batchSize = modelData.configuration.batchSize;
-        
-        if (modelData.algorithm === 'ppo' && modelData.configuration.entropyCoef) {
+        if (modelData.configuration.entropyCoef) {
           this.entropyCoef = modelData.configuration.entropyCoef;
-        } else if (modelData.algorithm === 'dqn' && modelData.configuration.discountFactor) {
-          this.discountFactor = modelData.configuration.discountFactor;
+        }
+        if (modelData.configuration.gamma) {
+          this.gamma = modelData.configuration.gamma;
         }
         
         // Apply saved stats
         this.accuracy = modelData.stats.accuracy;
         this.averageReward = modelData.stats.averageReward;
         this.episodes = modelData.stats.episodes;
-        this.progress = 100; // Assume a loaded model is fully trained
+        this.progress = 100;
         
-        // Generate visualization based on loaded model
-        this.generateNetworkVisualization();
-        
-        // Setup chart data for loaded model
-        this.accuracyChartData = [{
-          name: 'Accuracy', 
-          series: [{ name: this.episodes.toString(), value: this.accuracy }]
-        }];
-        
-        this.rewardChartData = [{
-          name: 'Reward',
-          series: [{ name: this.episodes.toString(), value: this.averageReward }]
-        }];
+        this.updateChartsFromLoadedModel();
         
         this.snackBar.open('Model loaded successfully!', 'Close', {
           duration: 3000
         });
-      } catch (error) {
-        console.error('Error parsing saved model:', error);
-        this.snackBar.open('Failed to load model: Invalid model data', 'Close', {
+      } else {
+        this.snackBar.open('No saved model found!', 'Close', {
           duration: 3000
         });
       }
+    } catch (error) {
+      console.error('Error loading model:', error);
+      this.snackBar.open('Failed to load model', 'Close', { duration: 3000 });
+    }
+  }
+
+  generateNewSudoku(): void {
+    // Generate new puzzle
+    this.initializeBoard();
+    
+    // Reset any highlights
+    this.resetHighlights();
+    
+    this.snackBar.open('New puzzle generated!', 'Close', { duration: 2000 });
+  }
+
+  testOnCurrentBoard(): void {
+    // Test the current model on the current board
+    this.testModel();
+  }
+
+  // Get visible nodes for network visualization (limit for display)
+  getVisibleNodes(totalNodes: number): number[] {
+    const maxVisible = 5;
+    if (totalNodes <= maxVisible) {
+      return Array.from({ length: totalNodes }, (_, i) => i);
     } else {
-      this.snackBar.open('No saved model found!', 'Close', {
-        duration: 3000
+      return Array.from({ length: maxVisible }, (_, i) => i);
+    }
+  }
+
+  // Helper method to handle cell clicks in the Sudoku board
+  onCellClick(row: number, col: number): void {
+    // For visualization purposes only - not interactive during training
+    if (!this.isTraining) {
+      console.log(`Cell clicked: (${row}, ${col})`);
+    }
+  }
+
+  // Handle algorithm selection change
+  async onAlgorithmChange(): Promise<void> {
+    if (this.isTraining) {
+      this.stopTraining();
+    }
+
+    // Initialize the selected algorithm
+    if (this.selectedAlgorithm === 'ppo') {
+      await this.initializePPOAgent();
+    } else if (this.selectedAlgorithm === 'dqn') {
+      await this.initializeDQNAgent();
+    }
+
+    // Update network architecture visualization
+    this.updateNetworkArchitecture();
+
+    // Reset training stats
+    this.resetTrainingStats();
+
+    this.snackBar.open(`Switched to ${this.selectedAlgorithm.toUpperCase()} algorithm`, 'Close', { duration: 2000 });
+  }
+
+  private resetTrainingStats(): void {
+    this.progress = 0;
+    this.episodes = 0;
+    this.accuracy = 0;
+    this.averageReward = 0;
+    this.currentReward = 0;
+    this.actorLoss = 0;
+    this.criticLoss = 0;
+    this.avgAdvantage = 0;
+    this.qValue = 0;
+    this.explorationRate = 0;
+    this.totalSteps = 0;
+    
+    // Reset chart data
+    this.accuracyChartData = [{ name: 'Accuracy', series: [] }];
+    this.rewardChartData = [{ name: 'Reward', series: [] }];
+  }
+
+  updateNetworkArchitecture(): void {
+    if (this.selectedAlgorithm === 'ppo') {
+      this.networkArchitecture = [
+        { name: 'Input', units: 81 },  // Sudoku board state
+        { name: 'Hidden 1', units: 256 },
+        { name: 'Hidden 2', units: 128 },
+        { name: 'Hidden 3', units: 64 },
+        { name: 'Policy/Value', units: 729 }   // Policy output (729 actions)
+      ];
+      this.hasNeuralNetwork = true;
+    } else if (this.selectedAlgorithm === 'dqn') {
+      this.networkArchitecture = [
+        { name: 'Input', units: 81 },  // Sudoku board state
+        { name: 'Shared', units: 128 },
+        { name: 'Value Stream', units: 64 },
+        { name: 'Advantage Stream', units: 64 },
+        { name: 'Q-Values', units: 729 } // 729 Q-values (81 cells × 9 values)
+      ];
+      this.hasNeuralNetwork = true;
+    } else {
+      this.networkArchitecture = [];
+      this.hasNeuralNetwork = false;
+    }
+    this.showNetworkVisualization = this.hasNeuralNetwork;
+  }
+
+  // Update configuration when settings change
+  async updatePPOConfig(): Promise<void> {
+    if (this.selectedAlgorithm === 'ppo') {
+      const config: Partial<PPOConfig> = {
+        learningRate: this.learningRate,
+        batchSize: this.batchSize,
+        entropyCoef: this.entropyCoef
+      };
+      
+      this.ppoAgent.updateConfig(config);
+    }
+  }
+
+  // Update DQN configuration when settings change
+  async updateDQNConfig(): Promise<void> {
+    if (this.selectedAlgorithm === 'dqn') {
+      const config: Partial<DQNConfig> = {
+        learningRate: this.learningRate,
+        batchSize: this.batchSize,
+        gamma: this.gamma,
+        epsilon: this.epsilon,
+        epsilonDecay: this.epsilonDecay,
+        targetUpdateFreq: this.targetUpdateFreq
+      };
+      
+      this.dqnAgent.updateConfig(config);
+    }
+  }
+
+  // Update charts from loaded model data
+  private updateChartsFromLoadedModel(): void {
+    // Simulate chart data for loaded model
+    const dataPoints = Math.min(10, this.episodes);
+    
+    // Generate simulated progress data
+    for (let i = 1; i <= dataPoints; i++) {
+      const episode = Math.floor((this.episodes / dataPoints) * i);
+      const progressRatio = i / dataPoints;
+      
+      this.accuracyChartData[0].series.push({
+        name: episode.toString(),
+        value: this.accuracy * progressRatio
+      });
+      
+      this.rewardChartData[0].series.push({
+        name: episode.toString(),
+        value: this.averageReward * progressRatio
       });
     }
-  }
-
-  private updateChartsFromLoadedModel(): void {
-    // Setup chart data for loaded model
-    this.accuracyChartData = [{
-      name: 'Accuracy', 
-      series: [{ name: this.episodes.toString(), value: this.accuracy }]
-    }];
     
-    this.rewardChartData = [{
-      name: 'Reward',
-      series: [{ name: this.episodes.toString(), value: this.averageReward }]
-    }];
+    // Trigger chart update
+    this.accuracyChartData = [...this.accuracyChartData];
+    this.rewardChartData = [...this.rewardChartData];
+    
   }
 
-  private shuffleArray<T>(array: T[]): T[] {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
+  // File operations
+  triggerFileInput(): void {
+    this.fileInput.nativeElement.click();
   }
 
-  // File handling methods for model import/export
   onFileSelected(event: any): void {
     const file = event.target.files[0];
-    if (file) {
+    if (file && file.type === 'application/json') {
       const reader = new FileReader();
       reader.onload = (e) => {
         try {
-          const modelData = JSON.parse(e.target?.result as string);
+          const modelData: ModelData = JSON.parse(e.target?.result as string);
           this.importModelFromFile(modelData);
         } catch (error) {
           console.error('Error parsing model file:', error);
@@ -984,7 +1292,12 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
         }
       };
       reader.readAsText(file);
+    } else {
+      this.snackBar.open('Please select a valid JSON file', 'Close', { duration: 3000 });
     }
+    
+    // Reset file input
+    event.target.value = '';
   }
 
   async importModelFromFile(modelData: ModelData): Promise<void> {
@@ -1015,9 +1328,48 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
         this.snackBar.open('PPO Model imported successfully!', 'Close', {
           duration: 3000
         });
+      } else if (modelData.algorithm === 'dqn') {
+        // Initialize DQN agent first
+        await this.initializeDQNAgent();
+        
+        // Load weights
+        await this.dqnAgent.importWeights(modelData.weights);
+        
+        // Apply settings
+        this.selectedAlgorithm = modelData.algorithm;
+        this.learningRate = modelData.configuration.learningRate;
+        this.batchSize = modelData.configuration.batchSize;
+        if (modelData.configuration.gamma) {
+          this.gamma = modelData.configuration.gamma;
+        }
+        if (modelData.configuration.epsilon) {
+          this.epsilon = modelData.configuration.epsilon;
+        }
+        if (modelData.configuration.epsilonDecay) {
+          this.epsilonDecay = modelData.configuration.epsilonDecay;
+        }
+        if (modelData.configuration.targetUpdateFreq) {
+          this.targetUpdateFreq = modelData.configuration.targetUpdateFreq;
+        }
+        
+        // Apply stats
+        this.accuracy = modelData.stats.accuracy;
+        this.averageReward = modelData.stats.averageReward;
+        this.episodes = modelData.stats.episodes;
+        this.progress = 100;
+        
+        this.updateChartsFromLoadedModel();
+        
+        this.snackBar.open('DQN Model imported successfully!', 'Close', {
+          duration: 3000
+        });
       } else {
         this.snackBar.open('Unsupported model format', 'Close', { duration: 3000 });
       }
+      
+      // Update network architecture
+      this.updateNetworkArchitecture();
+      
     } catch (error) {
       console.error('Error importing model:', error);
       this.snackBar.open('Failed to import model', 'Close', { duration: 3000 });
@@ -1062,8 +1414,47 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
         this.snackBar.open('PPO Model exported successfully!', 'Close', {
           duration: 3000
         });
+      } else if (this.selectedAlgorithm === 'dqn') {
+        const weights = await this.dqnAgent.exportWeights();
+        const config = this.dqnAgent.getConfig();
+        
+        const modelData: ModelData = {
+          algorithm: this.selectedAlgorithm,
+          weights: weights,
+          configuration: {
+            learningRate: config.learningRate,
+            batchSize: config.batchSize,
+            gamma: config.gamma,
+            epsilon: config.epsilon,
+            epsilonDecay: config.epsilonDecay,
+            targetUpdateFreq: config.targetUpdateFreq
+          },
+          stats: {
+            accuracy: this.accuracy,
+            averageReward: this.averageReward,
+            episodes: this.episodes
+          },
+          timestamp: Date.now()
+        };
+        
+        // Create and download file
+        const blob = new Blob([JSON.stringify(modelData, null, 2)], {
+          type: 'application/json'
+        });
+        
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `sudoku-dqn-model-${Date.now()}.json`;
+        link.click();
+        
+        window.URL.revokeObjectURL(url);
+        
+        this.snackBar.open('DQN Model exported successfully!', 'Close', {
+          duration: 3000
+        });
       } else {
-        this.snackBar.open('No trained PPO model to export', 'Close', { duration: 3000 });
+        this.snackBar.open('No trained model to export', 'Close', { duration: 3000 });
       }
     } catch (error) {
       console.error('Error exporting model:', error);
@@ -1071,8 +1462,8 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
-  triggerFileInput(): void {
-    this.fileInput.nativeElement.click();
+  newBoard(): void {
+    this.generateNewSudoku();
   }
 
   backToMenu(): void {
@@ -1081,114 +1472,10 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
       this.stopTraining();
     }
     
-    // Dispose of PPO agent resources
+    // Dispose of agent resources
     this.ppoAgent.dispose();
+    this.dqnAgent.dispose();
     
     this.router.navigate(['/menu']);
-  }
-
-  newBoard(): void {
-    // Stop training if active
-    if (this.isTraining) {
-      this.stopTraining();
-    }
-    
-    // Generate new board
-    this.generateNewSudoku();
-  }
-
-  async onAlgorithmChange(): Promise<void> {
-    // Stop any ongoing training
-    if (this.isTraining) {
-      this.stopTraining();
-    }
-    
-    // Reset stats
-    this.accuracy = 0;
-    this.averageReward = 0;
-    this.episodes = 0;
-    this.progress = 0;
-    this.actorLoss = 0;
-    this.criticLoss = 0;
-    this.avgAdvantage = 0;
-    
-    // Initialize the selected algorithm
-    if (this.selectedAlgorithm === 'ppo') {
-      await this.initializePPOAgent();
-    }
-    
-    // Reset chart data
-    this.accuracyChartData = [{ name: 'Accuracy', series: [] }];
-    this.rewardChartData = [{ name: 'Reward', series: [] }];
-    
-    // Update network visualization
-    this.generateNetworkVisualization();
-
-    // Update neural network visualization state based on selected algorithm
-    if (this.selectedAlgorithm === 'ppo') {
-      this.hasNeuralNetwork = true;
-      this.showNetworkVisualization = true;
-      this.updateNetworkArchitecture();
-    } else if (this.selectedAlgorithm === 'dqn') {
-      this.hasNeuralNetwork = true;
-      this.showNetworkVisualization = true;
-      this.updateNetworkArchitecture();
-    } else {
-      this.hasNeuralNetwork = false;
-      this.showNetworkVisualization = false;
-    }
-  }
-
-  // Method to update the network architecture visualization based on the selected algorithm
-  updateNetworkArchitecture() {
-    if (this.selectedAlgorithm === 'ppo') {
-      this.networkArchitecture = [
-        { name: 'Input', units: 81 },  // Sudoku board state
-        { name: 'Hidden 1', units: 128 },
-        { name: 'Hidden 2', units: 64 },
-        { name: 'Policy', units: 9 }   // Digit probabilities
-      ];
-    } else if (this.selectedAlgorithm === 'dqn') {
-      this.networkArchitecture = [
-        { name: 'Input', units: 81 },  // Sudoku board state
-        { name: 'Hidden', units: 64 },
-        { name: 'Value', units: 1 },   // State value
-        { name: 'Advantage', units: 9 } // Action advantages
-      ];
-    } else {
-      this.networkArchitecture = [];
-    }
-  }
-
-  // Helper method to limit the number of nodes displayed in the visualization
-  getVisibleNodes(totalUnits: number): number[] {
-    // For large layers, just show a small representative sample
-    const maxVisible = 5;
-    if (totalUnits <= maxVisible) {
-      return Array(totalUnits).fill(0).map((_, i) => i);
-    } else {
-      return Array(maxVisible).fill(0).map((_, i) => i);
-    }
-  }
-
-  // Update PPO configuration when settings change
-  async updatePPOConfig(): Promise<void> {
-    if (this.selectedAlgorithm === 'ppo') {
-      const config: Partial<PPOConfig> = {
-        learningRate: this.learningRate,
-        batchSize: this.batchSize,
-        entropyCoef: this.entropyCoef
-      };
-      
-      this.ppoAgent.updateConfig(config);
-    }
-  }
-
-  // Helper method to handle cell clicks in the Sudoku board
-  onCellClick(row: number, col: number): void {
-    // For visualization purposes only - not interactive during training
-    if (!this.isTraining) {
-      console.log(`Cell clicked: (${row}, ${col})`);
-    }
   }
 }
