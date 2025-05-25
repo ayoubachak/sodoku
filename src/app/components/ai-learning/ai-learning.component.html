@@ -131,6 +131,7 @@
           <div class="model-controls">
             <button 
               mat-raised-button 
+              class="save-btn"
               [disabled]="isTraining || progress < 20"
               (click)="saveModel()">
               <mat-icon>save</mat-icon>
@@ -138,11 +139,28 @@
             </button>
             <button 
               mat-raised-button 
+              class="download-btn"
+              [disabled]="isTraining || progress < 20"
+              (click)="downloadModel()">
+              <mat-icon>download</mat-icon>
+              Download
+            </button>
+            <button 
+              mat-raised-button 
+              class="load-btn"
               [disabled]="isTraining"
-              (click)="loadModel()">
+              (click)="triggerFileInput()">
               <mat-icon>file_upload</mat-icon>
               Load Model
             </button>
+            <!-- Hidden file input for loading model JSON files -->
+            <input 
+              type="file" 
+              #fileInput
+              style="display: none;" 
+              accept="application/json" 
+              (change)="handleFileUpload($event)"
+            />
           </div>
         </mat-card-content>
       </mat-card>

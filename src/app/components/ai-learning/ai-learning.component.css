@@ -198,6 +198,7 @@ mat-card-content {
 /* Model save/load controls */
 .model-controls {
   display: flex;
+  flex-wrap: wrap;
   gap: 1rem;
   margin-top: 1rem;
   justify-content: space-between;
@@ -205,10 +206,63 @@ mat-card-content {
 
 .model-controls button {
   flex: 1;
+  min-width: 110px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  padding: 0.5rem;
+}
+
+.save-btn {
+  background: #10b981;
+  color: white;
+}
+
+.save-btn:hover {
+  background: #059669;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.download-btn {
+  background: #3b82f6;
+  color: white;
+}
+
+.download-btn:hover {
+  background: #2563eb;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.load-btn {
+  background: #f3f4f6;
+  color: #4b5563;
+  border: 2px solid #e5e7eb;
+}
+
+.load-btn:hover {
+  background: #e5e7eb;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Dark theme button adjustments */
+:host-context(.dark-theme) .save-btn {
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+
+:host-context(.dark-theme) .download-btn {
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+:host-context(.dark-theme) .load-btn {
+  background: #4b5563;
+  color: #f3f4f6;
+  border-color: #6b7280;
+}
+
+:host-context(.dark-theme) .load-btn:hover {
+  background: #6b7280;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 /* Charts */

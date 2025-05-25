@@ -168,6 +168,18 @@ button mat-icon {
   box-shadow: 0 8px 25px rgba(245, 87, 108, 0.4);
 }
 
+.settings-btn {
+  background: #f3f4f6;
+  color: #4b5563;
+  border: 2px solid #e5e7eb;
+}
+
+.settings-btn:hover {
+  background: #e5e7eb;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+}
+
 /* Dark theme button adjustments */
 body.dark-theme .primary-btn {
   box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
@@ -175,6 +187,17 @@ body.dark-theme .primary-btn {
 
 body.dark-theme .secondary-btn {
   box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
+}
+
+body.dark-theme .settings-btn {
+  background: #4b5563;
+  color: #f3f4f6;
+  border-color: #6b7280;
+}
+
+body.dark-theme .settings-btn:hover {
+  background: #6b7280;
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.3);
 }
 
 .game-description {

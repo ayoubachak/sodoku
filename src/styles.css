@@ -284,6 +284,22 @@ body.dark-theme .difficulty-select {
   color: #f3f4f6 !important;
 }
 
+/* Enhanced dark theme button styling */
+body.dark-theme .settings-btn {
+  background: #374151 !important;
+  color: #f3f4f6 !important;
+  border-color: #4b5563 !important;
+}
+
+body.dark-theme .settings-btn:hover {
+  background: #4b5563 !important;
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-theme mat-card-actions .settings-btn mat-icon {
+  color: #f3f4f6 !important;
+}
+
 /* Responsive font sizes */
 @media (max-width: 768px) {
   html {

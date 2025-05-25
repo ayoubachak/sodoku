@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -124,6 +124,9 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
     isSameNumber: boolean;
     isHighlighted: boolean;
   }[][] = [];
+
+  // File input reference
+  @ViewChild('fileInput') fileInput!: ElementRef;
 
   constructor(
     private router: Router,
@@ -584,6 +587,119 @@ export class AiLearningComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
+  downloadModel(): void {
+    // Create the model data object
+    const modelData: ModelData = {
+      algorithm: this.selectedAlgorithm,
+      weights: { /* Would contain actual model weights */ },
+      configuration: {
+        learningRate: this.learningRate,
+        batchSize: this.batchSize,
+        ...(this.selectedAlgorithm === 'ppo' ? { entropyCoef: this.entropyCoef } : { discountFactor: this.discountFactor })
+      },
+      stats: {
+        accuracy: this.accuracy,
+        averageReward: this.averageReward,
+        episodes: this.episodes
+      },
+      timestamp: Date.now()
+    };
+    
+    // Create a blob from the JSON data
+    const jsonString = JSON.stringify(modelData, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    
+    // Create a download link and trigger the download
+    const downloadLink = document.createElement('a');
+    downloadLink.href = URL.createObjectURL(blob);
+    downloadLink.download = `sudoku_ai_model_${this.selectedAlgorithm}_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+    
+    this.snackBar.open('Model downloaded successfully!', 'Close', {
+      duration: 3000
+    });
+  }
+
+  // Trigger the hidden file input click
+  triggerFileInput(): void {
+    this.fileInput.nativeElement.click();
+  }
+
+  // Handle file upload when a file is selected
+  handleFileUpload(event: any): void {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      
+      reader.onload = (e: any) => {
+        try {
+          const importedModel: ModelData = JSON.parse(e.target.result);
+          
+          // Validate the imported model structure
+          if (!importedModel.algorithm || !importedModel.configuration || !importedModel.stats) {
+            throw new Error('Invalid model format');
+          }
+          
+          // Apply imported settings
+          this.selectedAlgorithm = importedModel.algorithm;
+          this.learningRate = importedModel.configuration.learningRate;
+          this.batchSize = importedModel.configuration.batchSize;
+          
+          if (importedModel.algorithm === 'ppo' && importedModel.configuration.entropyCoef) {
+            this.entropyCoef = importedModel.configuration.entropyCoef;
+          } else if (importedModel.algorithm === 'dqn' && importedModel.configuration.discountFactor) {
+            this.discountFactor = importedModel.configuration.discountFactor;
+          }
+          
+          // Apply imported stats
+          this.accuracy = importedModel.stats.accuracy;
+          this.averageReward = importedModel.stats.averageReward;
+          this.episodes = importedModel.stats.episodes;
+          this.progress = 100; // Assume a loaded model is fully trained
+          
+          // Generate visualization based on loaded model
+          this.generateNetworkVisualization();
+          
+          // Setup chart data for loaded model
+          this.accuracyChartData = [{
+            name: 'Accuracy', 
+            series: [{ name: this.episodes.toString(), value: this.accuracy }]
+          }];
+          
+          this.rewardChartData = [{
+            name: 'Reward',
+            series: [{ name: this.episodes.toString(), value: this.averageReward }]
+          }];
+          
+          // Also save the imported model to localStorage for future use
+          localStorage.setItem('sudoku_ai_model', JSON.stringify(importedModel));
+          
+          this.snackBar.open('Model imported successfully!', 'Close', {
+            duration: 3000
+          });
+        } catch (error) {
+          console.error('Error importing model:', error);
+          this.snackBar.open('Failed to import model: Invalid format', 'Close', {
+            duration: 3000
+          });
+        }
+      };
+      
+      reader.onerror = () => {
+        this.snackBar.open('Error reading the file', 'Close', {
+          duration: 3000
+        });
+      };
+      
+      reader.readAsText(file);
+      
+      // Reset the file input so the same file can be selected again if needed
+      event.target.value = '';
+    }
+  }
+  
   shuffleArray<T>(array: T[]): T[] {
     const newArray = [...array];
     for (let i = newArray.length - 1; i > 0; i--) {
