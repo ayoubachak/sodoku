@@ -100,13 +100,13 @@ mat-card-actions {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-  padding: 1.5rem 0 0 0;
+  padding: 1.5rem 0 0.5rem 0;
 }
 
 /* Enhanced Button styling */
 button {
   width: 100%;
-  padding: 1.25rem 2rem;
+  padding: 1.25rem 1.5rem;
   font-size: 1.1rem;
   font-weight: 600;
   border-radius: 14px;
@@ -196,14 +196,16 @@ body.dark-theme .game-description p {
 @media (min-width: 768px) {
   mat-card-actions {
     flex-direction: row;
+    flex-wrap: wrap;
     justify-content: space-between;
-    gap: 1.5rem;
+    gap: 1rem;
   }
   
   button {
     width: auto;
     flex: 1;
     min-width: 160px;
+    padding: 1.25rem 1rem;
   }
 }
 
@@ -213,7 +215,7 @@ body.dark-theme .game-description p {
   }
   
   .menu-card {
-    padding: 2rem;
+    padding: 1.75rem;
   }
   
   mat-card-title {
@@ -221,7 +223,7 @@ body.dark-theme .game-description p {
   }
   
   button {
-    padding: 1rem 1.5rem;
+    padding: 1rem;
     font-size: 1rem;
     min-height: 50px;
   }
