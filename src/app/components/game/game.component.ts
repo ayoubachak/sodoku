@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { CellComponent } from '../cell/cell.component';
 import { SudokuService, SudokuBoard } from '../../services/sudoku.service';
 import { LocalSudokuGeneratorService } from '../../services/local-sudoku-generator.service';
@@ -11,7 +12,7 @@ import { LocalSudokuGeneratorService } from '../../services/local-sudoku-generat
 @Component({
   selector: 'app-game',
   standalone: true,
-  imports: [CommonModule, MatButtonModule, MatIconModule, MatTooltipModule, CellComponent],
+  imports: [CommonModule, MatButtonModule, MatIconModule, MatTooltipModule, MatSnackBarModule, CellComponent],
   templateUrl: './game.component.html',
   styleUrl: './game.component.css'
 })
@@ -37,7 +38,8 @@ export class GameComponent implements OnInit, OnDestroy {
   constructor(
     private readonly router: Router, 
     private readonly sudokuService: SudokuService,
-    private readonly localGenerator: LocalSudokuGeneratorService
+    private readonly localGenerator: LocalSudokuGeneratorService,
+    private _snackBar: MatSnackBar
   ) {
     // Initialize notes array
     this.initializeNotes();
@@ -206,6 +208,9 @@ export class GameComponent implements OnInit, OnDestroy {
         // Increment mistakes counter
         this.mistakes++;
         console.log('Incorrect number!');
+        this._snackBar.open('Incorrect number!', 'Close', {
+          duration: 2000,
+        });
         
         if (this.mistakes >= 3) {
           console.log('Game over! Too many mistakes.');
