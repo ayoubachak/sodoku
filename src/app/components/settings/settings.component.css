@@ -3,36 +3,39 @@
   justify-content: center;
   align-items: center;
   width: 100%;
-  max-width: 500px;
+  max-width: 600px;
+  padding: 1rem;
 }
 
 .settings-card {
   width: 100%;
-  padding: 2rem;
+  max-width: 550px;
+  padding: 2.5rem;
   background: white;
-  border-radius: 16px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
 }
 
 /* Dark theme settings card styling */
 body.dark-theme .settings-card {
   background: #2d2d2d;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
 }
 
 mat-card-header {
-  margin-bottom: 2rem;
+  margin-bottom: 2.5rem;
   justify-content: center;
   text-align: center;
 }
 
 mat-card-title {
-  font-size: 2rem;
+  font-size: 2.25rem;
   font-weight: 700;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -40,9 +43,10 @@ mat-card-title {
 }
 
 mat-card-subtitle {
-  font-size: 1rem;
+  font-size: 1.1rem;
   color: #6b7280;
   font-weight: 400;
+  line-height: 1.4;
 }
 
 /* Dark theme subtitle color */
@@ -51,11 +55,12 @@ body.dark-theme mat-card-subtitle {
 }
 
 .settings-group {
-  margin-bottom: 2rem;
-  padding: 1.5rem;
+  margin-bottom: 2.5rem;
+  padding: 2rem;
   background: #f9fafb;
-  border-radius: 12px;
+  border-radius: 16px;
   border: 1px solid #e5e7eb;
+  transition: all 0.3s ease;
 }
 
 /* Dark theme settings group styling */
@@ -65,12 +70,13 @@ body.dark-theme .settings-group {
 }
 
 .settings-group h3 {
-  margin: 0 0 1.5rem 0;
-  font-size: 1.25rem;
+  margin: 0 0 2rem 0;
+  font-size: 1.4rem;
   font-weight: 600;
   color: #374151;
-  padding-bottom: 0.75rem;
+  padding-bottom: 1rem;
   border-bottom: 2px solid #e5e7eb;
+  text-align: center;
 }
 
 /* Dark theme group title color and border */
@@ -83,17 +89,19 @@ body.dark-theme .settings-group h3 {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
-  padding: 1rem;
+  margin-bottom: 1.75rem;
+  padding: 1.5rem;
   background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  transition: all 0.2s ease;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  min-height: 64px;
 }
 
 /* Dark theme setting item background */
 body.dark-theme .setting-item {
   background: #2d2d2d;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .setting-item:last-child {
@@ -101,14 +109,19 @@ body.dark-theme .setting-item {
 }
 
 .setting-item:hover {
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+body.dark-theme .setting-item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .setting-item span {
-  font-size: 1rem;
+  font-size: 1.1rem;
   font-weight: 500;
   color: #374151;
+  flex: 1;
 }
 
 /* Dark theme setting item text color */
@@ -116,86 +129,135 @@ body.dark-theme .setting-item span {
   color: #f3f4f6;
 }
 
+/* Enhanced mat-slide-toggle styling */
 mat-slide-toggle {
-  margin-left: 1rem;
+  margin-left: 2rem;
+  min-width: 50px;
 }
 
+/* Enhanced mat-select styling */
 mat-select {
-  min-width: 120px;
+  margin-left: 2rem;
+  min-width: 140px;
   background: #f3f4f6;
-  border-radius: 6px;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  border: 2px solid #e5e7eb;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+mat-select:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 /* Dark theme select box styling */
 body.dark-theme mat-select {
   background: #4b5563;
   color: #f3f4f6;
+  border-color: #6b7280;
+}
+
+body.dark-theme mat-select:hover {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
 }
 
 mat-card-actions {
   display: flex;
-  justify-content: flex-end;
-  gap: 1rem;
+  justify-content: center;
+  gap: 1.5rem;
   padding: 2rem 0 0 0;
   border-top: 1px solid #e5e7eb;
   margin-top: 2rem;
 }
 
+body.dark-theme mat-card-actions {
+  border-top-color: #4b5563;
+}
+
 button {
-  padding: 0.75rem 2rem;
-  font-size: 1rem;
+  padding: 1rem 2.5rem;
+  font-size: 1.1rem;
   font-weight: 600;
-  border-radius: 8px;
+  border-radius: 12px;
   transition: all 0.3s ease;
-  min-width: 100px;
+  min-width: 120px;
+  text-transform: none;
 }
 
 button[color="primary"] {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border: none;
   transform: translateY(0);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
 }
 
 button[color="primary"]:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
 }
 
 button:not([color]) {
   background: #f3f4f6;
   color: #6b7280;
-  border: 1px solid #d1d5db;
+  border: 2px solid #d1d5db;
 }
 
 button:not([color]):hover {
   background: #e5e7eb;
+  border-color: #9ca3af;
   transform: translateY(-1px);
 }
 
+body.dark-theme button:not([color]) {
+  background: #374151;
+  color: #f3f4f6;
+  border-color: #4b5563;
+}
+
+body.dark-theme button:not([color]):hover {
+  background: #4b5563;
+  border-color: #6b7280;
+}
+
 @media (max-width: 768px) {
+  .settings-container {
+    padding: 0.5rem;
+  }
+  
   .settings-card {
-    padding: 1.5rem;
+    padding: 2rem;
   }
   
   .settings-group {
-    padding: 1rem;
+    padding: 1.5rem;
   }
   
   .setting-item {
     flex-direction: column;
     align-items: flex-start;
-    gap: 1rem;
+    gap: 1.25rem;
     text-align: left;
+    padding: 1.25rem;
   }
   
-  mat-slide-toggle, mat-select {
+  mat-slide-toggle, 
+  mat-select {
     margin-left: 0;
-    align-self: flex-end;
+    align-self: stretch;
+    width: 100%;
+  }
+  
+  mat-select {
+    min-width: unset;
   }
   
   mat-card-actions {
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 1rem;
   }
   
   button {
@@ -205,6 +267,10 @@ button:not([color]):hover {
 
 @media (max-width: 480px) {
   mat-card-title {
-    font-size: 1.75rem;
+    font-size: 2rem;
+  }
+  
+  .settings-group h3 {
+    font-size: 1.25rem;
   }
 }
