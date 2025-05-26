@@ -858,26 +858,26 @@ export class AiLearningComponent implements OnInit, OnDestroy {
     const cellKey = `${row}-${col}`;
     const validation = this.decisionValidation.get(cellKey);
     
-    console.log(`getCellValidationClass called for ${row},${col}, validation map size: ${this.decisionValidation.size}`); // Debug log
+    // console.log(`getCellValidationClass called for ${row},${col}, validation map size: ${this.decisionValidation.size}`); // Debug log
     
     if (!validation) {
-      console.log(`No validation found for ${row},${col}`); // Debug log
+      // console.log(`No validation found for ${row},${col}`); // Debug log
       return '';
     }
     
     // Check if validation is still valid (within display time)
     const now = Date.now();
     const timeElapsed = now - validation.timestamp;
-    console.log(`Validation found for ${row},${col}: isCorrect=${validation.isCorrect}, timeElapsed=${timeElapsed}ms, displayTime=${this.VALIDATION_DISPLAY_TIME}ms`); // Enhanced debug log
+    // console.log(`Validation found for ${row},${col}: isCorrect=${validation.isCorrect}, timeElapsed=${timeElapsed}ms, displayTime=${this.VALIDATION_DISPLAY_TIME}ms`); // Enhanced debug log
     
     if (timeElapsed > this.VALIDATION_DISPLAY_TIME) {
-      console.log(`Validation expired for ${row},${col}, removing`); // Debug log
+      // console.log(`Validation expired for ${row},${col}, removing`); // Debug log
       this.decisionValidation.delete(cellKey);
       return '';
     }
     
     const result = validation.isCorrect ? 'ai-decision-correct' : 'ai-decision-incorrect';
-    console.log(`Returning validation class for ${row},${col}: ${result}`); // Debug log
+    // console.log(`Returning validation class for ${row},${col}: ${result}`); // Debug log
     return result;
   }
 
