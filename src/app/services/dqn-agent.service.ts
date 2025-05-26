@@ -28,7 +28,6 @@ export interface Experience {
   reward: number;
   nextState: number[];
   done: boolean;
-  priority?: number; // for prioritized experience replay
 }
 
 @Injectable({
@@ -101,9 +100,31 @@ export class DQNAgentService {
     const advantageStream = tf.layers.dense({ units: 64, activation: 'relu' }).apply(shared3) as tf.SymbolicTensor;
     const actionAdvantages = tf.layers.dense({ units: 729, activation: 'linear', name: 'action_advantages' }).apply(advantageStream) as tf.SymbolicTensor;
 
-    // Simplified dueling combination - just add value to advantages directly
-    // This is a simplified version that avoids the lambda layer
-    const qValues = tf.layers.add().apply([stateValue, actionAdvantages]) as tf.SymbolicTensor;
+    // Custom layer for dueling combination: Q(s,a) = V(s) + (A(s,a) - mean(A(s,·)))
+    // This zero-centers the advantages for better stability
+    class DuelingLayer extends tf.layers.Layer {
+      constructor() {
+        super({ name: 'dueling_q_values' });
+      }
+
+      override computeOutputShape(inputShape: tf.Shape[]): tf.Shape {
+        return inputShape[1]; // Return the shape of advantages (729 actions)
+      }
+
+      override call(inputs: tf.Tensor[]): tf.Tensor {
+        return tf.tidy(() => {
+          const [values, advantages] = inputs;
+          // Calculate mean advantage across all actions
+          const advMean = tf.mean(advantages, 1, true); // Keep dims for broadcasting
+          // Zero-center advantages and add to state value
+          const centeredAdvantages = tf.sub(advantages, advMean);
+          return tf.add(values, centeredAdvantages);
+        });
+      }
+    }
+
+    const duelingLayer = new DuelingLayer();
+    const qValues = duelingLayer.apply([stateValue, actionAdvantages]) as tf.SymbolicTensor;
 
     const model = tf.model({ inputs: input, outputs: qValues });
     
@@ -337,7 +358,7 @@ export class DQNAgentService {
     }
   }
 
-  // Train the Q-network using experience replay
+  // Train the Q-network using experience replay with proper Double-DQN
   async train(): Promise<{ qValue: number; epsilon: number }> {
     if (this.replayBuffer.length < this.config.batchSize) {
       return { qValue: 0, epsilon: this.config.epsilon };
@@ -356,40 +377,115 @@ export class DQNAgentService {
       const statesTensor = tf.tensor2d(states);
       const nextStatesTensor = tf.tensor2d(nextStates);
       
-      // Get current Q-values and next Q-values
+      // Get current Q-values
       const currentQValues = this.mainNetwork.predict(statesTensor) as tf.Tensor;
-      const nextQValues = this.targetNetwork.predict(nextStatesTensor) as tf.Tensor;
       
-      // Calculate targets using a simpler approach
+      // Calculate targets using proper Double-DQN or standard DQN
       const targets = await tf.tidy(() => {
-        const targetsArray: number[][] = [];
-        
-        batch.forEach((exp, index) => {
-          const currentQ = currentQValues.slice([index, 0], [1, -1]).dataSync();
-          const nextQ = nextQValues.slice([index, 0], [1, -1]).dataSync();
+        if (this.config.doubleDQN) {
+          // Double-DQN: Use main network to select actions, target network to evaluate
+          const nextQValuesMain = this.mainNetwork.predict(nextStatesTensor) as tf.Tensor;
+          const nextQValuesTarget = this.targetNetwork.predict(nextStatesTensor) as tf.Tensor;
           
-          const target = [...currentQ];
-          const nextQValue = exp.done ? 0 : Math.max(...Array.from(nextQ));
-          target[exp.action] = exp.reward + this.config.gamma * nextQValue;
+          // Get action indices for the best actions according to main network
+          const bestActionIndices = tf.argMax(nextQValuesMain, 1);
           
-          targetsArray.push(target);
+          // Build target Q-values
+          const currentQData = currentQValues.arraySync() as number[][];
+          const nextQTargetData = nextQValuesTarget.arraySync() as number[][];
+          const bestActionsData = bestActionIndices.arraySync() as number[];
+          
+          const targetsArray = currentQData.map((currentQ, batchIndex) => {
+            const target = [...currentQ];
+            const exp = batch[batchIndex];
+            
+            if (exp.done) {
+              target[exp.action] = exp.reward;
+            } else {
+              // Use target network to evaluate the action selected by main network
+              const bestAction = bestActionsData[batchIndex];
+              const nextQValue = nextQTargetData[batchIndex][bestAction];
+              target[exp.action] = exp.reward + this.config.gamma * nextQValue;
+            }
+            
+            return target;
+          });
+          
+          // Clean up intermediate tensors
+          nextQValuesMain.dispose();
+          nextQValuesTarget.dispose();
+          bestActionIndices.dispose();
+          
+          return tf.tensor2d(targetsArray);
+        } else {
+          // Standard DQN
+          const nextQValues = this.targetNetwork.predict(nextStatesTensor) as tf.Tensor;
+          const currentQData = currentQValues.arraySync() as number[][];
+          const nextQData = nextQValues.arraySync() as number[][];
+          
+          const targetsArray = currentQData.map((currentQ, batchIndex) => {
+            const target = [...currentQ];
+            const exp = batch[batchIndex];
+            
+            if (exp.done) {
+              target[exp.action] = exp.reward;
+            } else {
+              // Get valid actions for next state to mask invalid actions
+              const validNextActions = this.getValidActionsFromState(exp.nextState);
+              let maxNextQ = -Infinity;
+              
+              // Find max Q-value among valid actions only
+              for (const action of validNextActions) {
+                if (nextQData[batchIndex][action] > maxNextQ) {
+                  maxNextQ = nextQData[batchIndex][action];
+                }
+              }
+              
+              target[exp.action] = exp.reward + this.config.gamma * (maxNextQ === -Infinity ? 0 : maxNextQ);
+            }
+            
+            return target;
+          });
+          
+          nextQValues.dispose();
+          return tf.tensor2d(targetsArray);
+        }
+      });
+      
+      // Apply action masking during training (mask invalid actions)
+      const maskedTargets = await tf.tidy(() => {
+        const targetsData = targets.arraySync() as number[][];
+        const maskedData = targetsData.map((targetRow, batchIndex) => {
+          const exp = batch[batchIndex];
+          const validActions = this.getValidActionsFromState(exp.state);
+          
+          // Create mask: 1 for valid actions, 0 for invalid
+          const mask = new Array(729).fill(0);
+          validActions.forEach(action => mask[action] = 1);
+          
+          // Apply mask to targets (keep valid actions, zero out invalid ones)
+          return targetRow.map((value, actionIndex) => 
+            actionIndex === exp.action ? value : value * mask[actionIndex]
+          );
         });
         
-        return tf.tensor2d(targetsArray);
+        return tf.tensor2d(maskedData);
       });
       
       // Train the main network
-      await this.mainNetwork.fit(statesTensor, targets, {
+      const history = await this.mainNetwork.fit(statesTensor, maskedTargets, {
         epochs: 1,
         verbose: 0
       });
+      
+      const avgQValue = tf.mean(currentQValues).dataSync()[0];
       
       // Clean up tensors
       statesTensor.dispose();
       nextStatesTensor.dispose();
       currentQValues.dispose();
-      nextQValues.dispose();
       targets.dispose();
+      maskedTargets.dispose();
       
       // Update target network periodically
       this.updateCounter++;
@@ -406,7 +502,7 @@ export class DQNAgentService {
       );
       
       this.isTraining = false;
-      return { qValue: 0, epsilon: this.config.epsilon };
+      return { qValue: avgQValue, epsilon: this.config.epsilon };
     } catch (error) {
       console.error('Error during DQN training:', error);
       this.isTraining = false;

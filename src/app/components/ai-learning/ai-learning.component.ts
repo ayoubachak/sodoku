@@ -136,6 +136,10 @@ export class AiLearningComponent implements OnInit, OnDestroy {
   cellHighlights: { row: number, col: number, value: number }[] = [];
   networkVisualization: any[] = [];
   
+  // Decision validation tracking
+  decisionValidation: Map<string, { isCorrect: boolean, timestamp: number }> = new Map();
+  private readonly VALIDATION_DISPLAY_TIME = 3000; // Show validation for 3 seconds (increased from 2)
+  
   // Board representation for the cell components
   cellData: {
     row: number;
@@ -815,12 +819,66 @@ export class AiLearningComponent implements OnInit, OnDestroy {
     // Clear previous highlights
     this.resetHighlights();
     
+    // Check if this move is correct by comparing with the solution
+    const isCorrect = this.solution[row][col] === value;
+    
+    // Store decision validation
+    const cellKey = `${row}-${col}`;
+    this.decisionValidation.set(cellKey, {
+      isCorrect,
+      timestamp: Date.now()
+    });
+    
     // Highlight the cell being modified
     this.cellData[row][col].isHighlighted = true;
     this.cellData[row][col].value = value;
     
     // Add to highlights array for template
     this.cellHighlights = [{ row, col, value }];
+    
+    // Clean up old validation entries after display time
+    this.cleanupOldValidations();
+  }
+  
+  // Clean up validation entries that are too old
+  private cleanupOldValidations(): void {
+    const now = Date.now();
+    for (const [key, validation] of this.decisionValidation.entries()) {
+      if (now - validation.timestamp > this.VALIDATION_DISPLAY_TIME) {
+        this.decisionValidation.delete(key);
+      }
+    }
+    
+    // Force change detection by creating a new Map reference
+    this.decisionValidation = new Map(this.decisionValidation);
+  }
+  
+  // Helper method to get cell validation status for the template
+  getCellValidationClass(row: number, col: number): string {
+    const cellKey = `${row}-${col}`;
+    const validation = this.decisionValidation.get(cellKey);
+    
+    console.log(`getCellValidationClass called for ${row},${col}, validation map size: ${this.decisionValidation.size}`); // Debug log
+    
+    if (!validation) {
+      console.log(`No validation found for ${row},${col}`); // Debug log
+      return '';
+    }
+    
+    // Check if validation is still valid (within display time)
+    const now = Date.now();
+    const timeElapsed = now - validation.timestamp;
+    console.log(`Validation found for ${row},${col}: isCorrect=${validation.isCorrect}, timeElapsed=${timeElapsed}ms, displayTime=${this.VALIDATION_DISPLAY_TIME}ms`); // Enhanced debug log
+    
+    if (timeElapsed > this.VALIDATION_DISPLAY_TIME) {
+      console.log(`Validation expired for ${row},${col}, removing`); // Debug log
+      this.decisionValidation.delete(cellKey);
+      return '';
+    }
+    
+    const result = validation.isCorrect ? 'ai-decision-correct' : 'ai-decision-incorrect';
+    console.log(`Returning validation class for ${row},${col}: ${result}`); // Debug log
+    return result;
   }
 
   private calculateAccuracy(): number {

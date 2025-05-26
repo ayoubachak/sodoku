@@ -225,6 +225,8 @@
                   [isSameNumber]="cell.isSameNumber"
                   [isHighlighted]="cell.isHighlighted"
                   [isCoachHighlighted]="cell.isHighlighted"
+                  [class.ai-decision-correct]="getCellValidationClass(cell.row, cell.col) === 'ai-decision-correct'"
+                  [class.ai-decision-incorrect]="getCellValidationClass(cell.row, cell.col) === 'ai-decision-incorrect'"
                   (cellClick)="onCellClick(cell.row, cell.col)">
                 </app-cell>
               </div>

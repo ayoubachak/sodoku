@@ -164,3 +164,89 @@
 :host-context(.dark-theme) .coach-highlighted {
   background-color: rgba(255, 193, 7, 0.6);
 }
+
+/* AI Decision Validation Styling - Subtle colors */
+:host(.ai-decision-correct) .cell,
+:host-context(.ai-decision-correct) .cell,
+.cell.ai-decision-correct {
+  background: rgba(34, 197, 94, 0.15) !important;
+  border: 2px solid rgba(34, 197, 94, 0.5) !important;
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.3), 0 0 6px rgba(34, 197, 94, 0.25) !important;
+  animation: correctPulse 0.8s ease-in-out !important;
+  z-index: 100 !important;
+  color: #000 !important;
+}
+
+:host(.ai-decision-incorrect) .cell,
+:host-context(.ai-decision-incorrect) .cell,
+.cell.ai-decision-incorrect {
+  background: rgba(239, 68, 68, 0.15) !important;
+  border: 2px solid rgba(239, 68, 68, 0.5) !important;
+  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.3), 0 0 6px rgba(239, 68, 68, 0.25) !important;
+  animation: incorrectShake 0.8s ease-in-out !important;
+  z-index: 100 !important;
+  color: #000 !important;
+}
+
+/* When both highlighted and validation classes are present */
+:host(.ai-decision-correct.highlighted) .cell,
+:host(.highlighted.ai-decision-correct) .cell,
+.cell.ai-decision-correct.highlighted,
+.cell.highlighted.ai-decision-correct {
+  background: rgba(34, 197, 94, 0.2) !important;
+  border: 2px solid rgba(34, 197, 94, 0.6) !important;
+}
+
+:host(.ai-decision-incorrect.highlighted) .cell,
+:host(.highlighted.ai-decision-incorrect) .cell,
+.cell.ai-decision-incorrect.highlighted,
+.cell.highlighted.ai-decision-incorrect {
+  background: rgba(239, 68, 68, 0.2) !important;
+  border: 2px solid rgba(239, 68, 68, 0.6) !important;
+}
+
+@keyframes correctPulse {
+  0% {
+    box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.3), 0 0 4px rgba(34, 197, 94, 0.2);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: inset 0 0 0 2px rgba(34, 197, 94, 0.4), 0 0 8px rgba(34, 197, 94, 0.3);
+    transform: scale(1.02);
+  }
+  100% {
+    box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.3), 0 0 6px rgba(34, 197, 94, 0.25);
+    transform: scale(1);
+  }
+}
+
+@keyframes incorrectShake {
+  0%, 100% {
+    transform: translateX(0) scale(1);
+  }
+  25% {
+    transform: translateX(-2px) scale(1.01);
+  }
+  75% {
+    transform: translateX(2px) scale(1.01);
+  }
+}
+
+/* Dark theme support for AI decision validation */
+:host-context(.dark-theme) .cell.ai-decision-correct,
+:host-context(.dark-theme) app-cell.ai-decision-correct .cell,
+body.dark-theme .cell.ai-decision-correct,
+body.dark-theme app-cell.ai-decision-correct .cell {
+  background-color: rgba(34, 197, 94, 0.2) !important;
+  border-color: rgba(34, 197, 94, 0.6) !important;
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.4), 0 0 6px rgba(34, 197, 94, 0.3) !important;
+}
+
+:host-context(.dark-theme) .cell.ai-decision-incorrect,
+:host-context(.dark-theme) app-cell.ai-decision-incorrect .cell,
+body.dark-theme .cell.ai-decision-incorrect,
+body.dark-theme app-cell.ai-decision-incorrect .cell {
+  background-color: rgba(239, 68, 68, 0.2) !important;
+  border-color: rgba(239, 68, 68, 0.6) !important;
+  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.4), 0 0 6px rgba(239, 68, 68, 0.3) !important;
+}
