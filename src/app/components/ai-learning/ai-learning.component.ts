@@ -136,10 +136,10 @@ export class AiLearningComponent implements OnInit, OnDestroy {
   cellHighlights: { row: number, col: number, value: number }[] = [];
   networkVisualization: any[] = [];
   
-  // Decision validation tracking
-  decisionValidation: Map<string, { isCorrect: boolean, timestamp: number }> = new Map();
-  private readonly VALIDATION_DISPLAY_TIME = 3000; // Show validation for 3 seconds (increased from 2)
-  
+  // Decision validation tracking - Use a more stable approach
+  private cellValidationStates: { [key: string]: string } = {};
+  private readonly VALIDATION_DISPLAY_TIME = 3000; // Show validation for 3 seconds
+
   // Board representation for the cell components
   cellData: {
     row: number;
@@ -567,10 +567,8 @@ export class AiLearningComponent implements OnInit, OnDestroy {
         // Update progress
         this.progress = Math.min(100, (this.episodes / maxEpisodes) * 100);
         
-        // Update charts every 5 episodes
-        if (this.episodes % 5 === 0) {
-          this.updateCharts();
-        }
+        // Update charts EVERY episode for real-time display (changed from every 5)
+        this.updateCharts();
         
         // Force change detection for real-time updates
         this.cdr.detectChanges();
@@ -701,10 +699,8 @@ export class AiLearningComponent implements OnInit, OnDestroy {
         // Update progress
         this.progress = Math.min(100, (this.episodes / maxEpisodes) * 100);
         
-        // Update charts every 5 episodes
-        if (this.episodes % 5 === 0) {
-          this.updateCharts();
-        }
+        // Update charts EVERY episode for real-time display (changed from every 5)
+        this.updateCharts();
         
         // Force change detection for real-time updates
         this.cdr.detectChanges();
@@ -829,12 +825,15 @@ export class AiLearningComponent implements OnInit, OnDestroy {
     // Check if this move is correct by comparing with the solution
     const isCorrect = this.solution[row][col] === value;
     
-    // Store decision validation
+    // Store decision validation in a more stable way
     const cellKey = `${row}-${col}`;
-    this.decisionValidation.set(cellKey, {
-      isCorrect,
-      timestamp: Date.now()
-    });
+    this.cellValidationStates[cellKey] = isCorrect ? 'ai-decision-correct' : 'ai-decision-incorrect';
+    
+    // Clean up old validation after timeout
+    setTimeout(() => {
+      delete this.cellValidationStates[cellKey];
+      this.cdr.detectChanges();
+    }, this.VALIDATION_DISPLAY_TIME);
     
     // Highlight the cell being modified
     this.cellData[row][col].isHighlighted = true;
@@ -842,50 +841,12 @@ export class AiLearningComponent implements OnInit, OnDestroy {
     
     // Add to highlights array for template
     this.cellHighlights = [{ row, col, value }];
-    
-    // Clean up old validation entries after display time
-    this.cleanupOldValidations();
   }
   
-  // Clean up validation entries that are too old
-  private cleanupOldValidations(): void {
-    const now = Date.now();
-    for (const [key, validation] of this.decisionValidation.entries()) {
-      if (now - validation.timestamp > this.VALIDATION_DISPLAY_TIME) {
-        this.decisionValidation.delete(key);
-      }
-    }
-    
-    // Force change detection by creating a new Map reference
-    this.decisionValidation = new Map(this.decisionValidation);
-  }
-  
-  // Helper method to get cell validation status for the template
+  // Helper method to get cell validation status for the template - now stable
   getCellValidationClass(row: number, col: number): string {
     const cellKey = `${row}-${col}`;
-    const validation = this.decisionValidation.get(cellKey);
-    
-    // console.log(`getCellValidationClass called for ${row},${col}, validation map size: ${this.decisionValidation.size}`); // Debug log
-    
-    if (!validation) {
-      // console.log(`No validation found for ${row},${col}`); // Debug log
-      return '';
-    }
-    
-    // Check if validation is still valid (within display time)
-    const now = Date.now();
-    const timeElapsed = now - validation.timestamp;
-    // console.log(`Validation found for ${row},${col}: isCorrect=${validation.isCorrect}, timeElapsed=${timeElapsed}ms, displayTime=${this.VALIDATION_DISPLAY_TIME}ms`); // Enhanced debug log
-    
-    if (timeElapsed > this.VALIDATION_DISPLAY_TIME) {
-      console.log(`Validation expired for ${row},${col}, removing`); // Debug log
-      this.decisionValidation.delete(cellKey);
-      return '';
-    }
-    
-    const result = validation.isCorrect ? 'ai-decision-correct' : 'ai-decision-incorrect';
-    // console.log(`Returning validation class for ${row},${col}: ${result}`); // Debug log
-    return result;
+    return this.cellValidationStates[cellKey] || '';
   }
 
   private calculateAccuracy(): number {
@@ -951,9 +912,42 @@ export class AiLearningComponent implements OnInit, OnDestroy {
     trainingStep();
   }
   
-  // Update charts with validated data
+  // Update charts with validated data - now updates every episode for real-time display
   private updateCharts(): void {
     try {
+      // Ensure chart data arrays are properly initialized before accessing them
+      if (!this.accuracyChartData || !Array.isArray(this.accuracyChartData) || this.accuracyChartData.length === 0) {
+        this.accuracyChartData = [{
+          name: this.selectedAlgorithm.toUpperCase() + ' Accuracy',
+          series: []
+        }];
+      }
+
+      if (!this.rewardChartData || !Array.isArray(this.rewardChartData) || this.rewardChartData.length === 0) {
+        this.rewardChartData = [{
+          name: this.selectedAlgorithm.toUpperCase() + ' Reward',
+          series: []
+        }];
+      }
+
+      if (!this.lossChartData || !Array.isArray(this.lossChartData) || this.lossChartData.length === 0) {
+        this.lossChartData = [{
+          name: this.selectedAlgorithm === 'ppo' ? 'Actor Loss' : 'Q-Value',
+          series: []
+        }];
+      }
+
+      // Ensure series arrays exist
+      if (!this.accuracyChartData[0].series) {
+        this.accuracyChartData[0].series = [];
+      }
+      if (!this.rewardChartData[0].series) {
+        this.rewardChartData[0].series = [];
+      }
+      if (!this.lossChartData[0].series) {
+        this.lossChartData[0].series = [];
+      }
+
       // Update accuracy chart with current episode data
       const accuracyData = {
         name: this.episodes.toString(),
@@ -965,22 +959,6 @@ export class AiLearningComponent implements OnInit, OnDestroy {
         name: this.episodes.toString(),
         value: this.validateNumber(this.currentReward, 0)
       };
-
-      // Initialize or update accuracy chart series
-      if (!this.accuracyChartData[0]?.series) {
-        this.accuracyChartData = [{
-          name: this.selectedAlgorithm.toUpperCase() + ' Accuracy',
-          series: []
-        }];
-      }
-
-      // Initialize or update reward chart series  
-      if (!this.rewardChartData[0]?.series) {
-        this.rewardChartData = [{
-          name: this.selectedAlgorithm.toUpperCase() + ' Reward',
-          series: []
-        }];
-      }
 
       // Add new data points
       this.accuracyChartData[0].series.push(accuracyData);
@@ -996,7 +974,8 @@ export class AiLearningComponent implements OnInit, OnDestroy {
 
       // Update loss chart for PPO
       if (this.selectedAlgorithm === 'ppo') {
-        if (!this.lossChartData[0]?.series) {
+        // Ensure we have both actor and critic loss series for PPO
+        if (this.lossChartData.length < 2) {
           this.lossChartData = [{
             name: 'Actor Loss',
             series: []
@@ -1005,6 +984,10 @@ export class AiLearningComponent implements OnInit, OnDestroy {
             series: []
           }];
         }
+
+        // Ensure series arrays exist for both
+        if (!this.lossChartData[0].series) this.lossChartData[0].series = [];
+        if (!this.lossChartData[1].series) this.lossChartData[1].series = [];
 
         this.lossChartData[0].series.push({
           name: this.episodes.toString(),
@@ -1025,7 +1008,8 @@ export class AiLearningComponent implements OnInit, OnDestroy {
 
       // Update DQN-specific charts
       if (this.selectedAlgorithm === 'dqn') {
-        if (!this.lossChartData[0]?.series) {
+        // Ensure we have both Q-value and exploration rate series for DQN
+        if (this.lossChartData.length < 2) {
           this.lossChartData = [{
             name: 'Q-Value',
             series: []
@@ -1034,6 +1018,10 @@ export class AiLearningComponent implements OnInit, OnDestroy {
             series: []
           }];
         }
+
+        // Ensure series arrays exist for both
+        if (!this.lossChartData[0].series) this.lossChartData[0].series = [];
+        if (!this.lossChartData[1].series) this.lossChartData[1].series = [];
 
         this.lossChartData[0].series.push({
           name: this.episodes.toString(),
@@ -1061,6 +1049,8 @@ export class AiLearningComponent implements OnInit, OnDestroy {
 
     } catch (error) {
       console.error('Error updating charts:', error);
+      // Reinitialize charts if there's an error
+      this.initializeChartData();
     }
   }
   
