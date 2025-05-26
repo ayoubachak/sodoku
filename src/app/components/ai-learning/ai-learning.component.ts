@@ -8,6 +8,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSliderModule } from '@angular/material/slider';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle'; // Add this import
 import { FormsModule } from '@angular/forms';
 import { NgxChartsModule, Color } from '@swimlane/ngx-charts';
 import * as tf from '@tensorflow/tfjs';
@@ -48,6 +49,7 @@ interface ModelData {
     MatSelectModule,
     MatProgressBarModule,
     MatSliderModule,
+    MatSlideToggleModule, // Add this import
     FormsModule,
     NgxChartsModule,
     CellComponent
@@ -64,6 +66,10 @@ export class AiLearningComponent implements OnInit, OnDestroy {
   board: number[][] = [];
   solution: number[][] = [];
   selectedAlgorithm: 'ppo' | 'dqn' = 'ppo';
+  
+  // AI Learning specific puzzle source settings
+  useApiForAI = true;
+  aiDifficulty: 'easy' | 'medium' | 'hard' | 'expert' = 'medium';
   
   // Training state
   isTraining = false;
@@ -223,6 +229,9 @@ export class AiLearningComponent implements OnInit, OnDestroy {
 
   async ngOnInit(): Promise<void> {
     try {
+      // Load AI-specific settings
+      this.loadAiSettings();
+      
       // Initialize board
       await this.initializeBoard();
       
@@ -723,6 +732,38 @@ export class AiLearningComponent implements OnInit, OnDestroy {
       this.isTraining = false;
       this.snackBar.open('DQN Training complete!', 'Close', { duration: 3000 });
     }
+  }
+
+  // Load AI Learning specific settings
+  private loadAiSettings(): void {
+    const aiSettings = this.sudokuService.getCurrentAiSettings();
+    this.useApiForAI = aiSettings.useApi ?? true;
+    this.aiDifficulty = aiSettings.aiDifficulty ?? 'medium';
+  }
+
+  // Save AI Learning specific settings
+  private saveAiSettings(): void {
+    const settings = {
+      useApi: this.useApiForAI,
+      aiDifficulty: this.aiDifficulty
+    };
+    this.sudokuService.saveAiSettings(settings);
+  }
+
+  // Handle API toggle for AI Learning
+  onApiToggleForAI(): void {
+    this.saveAiSettings();
+    this.snackBar.open(
+      `Switched to ${this.useApiForAI ? 'Online API' : 'Local (' + this.aiDifficulty + ')'} puzzles for AI training`, 
+      'Close', 
+      { duration: 3000 }
+    );
+  }
+
+  // Handle difficulty change for AI Learning
+  onAiDifficultyChange(): void {
+    this.saveAiSettings();
+    this.snackBar.open(`AI training difficulty set to ${this.aiDifficulty}`, 'Close', { duration: 2000 });
   }
 
   // Helper method to validate numbers and prevent NaN

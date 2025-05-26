@@ -26,6 +26,39 @@
           <mat-card-subtitle>Configure and train reinforcement learning agents</mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
+          <!-- Puzzle Source Settings for AI Learning -->
+          <div class="control-group">
+            <label>Puzzle Source for AI Training:</label>
+            <div class="puzzle-source-controls">
+              <div class="setting-item">
+                <span>Use Online API</span>
+                <mat-slide-toggle 
+                  [(ngModel)]="useApiForAI" 
+                  (change)="onApiToggleForAI()"
+                  [color]="'primary'"
+                  [checked]="useApiForAI">
+                </mat-slide-toggle>
+              </div>
+              
+              <div class="setting-item" *ngIf="!useApiForAI">
+                <span>Local Difficulty</span>
+                <mat-select [(ngModel)]="aiDifficulty" (selectionChange)="onAiDifficultyChange()">
+                  <mat-option value="easy">Easy</mat-option>
+                  <mat-option value="medium">Medium</mat-option>
+                  <mat-option value="hard">Hard</mat-option>
+                  <mat-option value="expert">Expert</mat-option>
+                </mat-select>
+              </div>
+              
+              <div class="puzzle-source-status">
+                <div class="status-indicator" [class.api-active]="useApiForAI" [class.local-active]="!useApiForAI">
+                  <mat-icon>{{ useApiForAI ? 'cloud' : 'offline_pin' }}</mat-icon>
+                  <span>{{ useApiForAI ? 'Online API Puzzles' : 'Local ' + (aiDifficulty | titlecase) + ' Puzzles' }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Algorithm Selection -->
           <div class="control-group">
             <label>Select Algorithm:</label>

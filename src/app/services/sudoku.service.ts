@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
+import { LocalSudokuGeneratorService } from './local-sudoku-generator.service';
 
 export interface SudokuResponse {
   newboard: {
@@ -34,10 +35,33 @@ export interface CellData {
 export class SudokuService {
   private apiUrl = 'https://sudoku-api.vercel.app/api/dosuku';
 
-  constructor(private http: HttpClient) { }
+  constructor(
+    private http: HttpClient,
+    private localGenerator: LocalSudokuGeneratorService
+  ) { }
 
-  // Get a new Sudoku board with specified difficulty
-  getNewBoard(difficulty?: string): Observable<SudokuBoard> {
+  // Get a new Sudoku board with specified difficulty, respecting user settings or AI settings
+  getNewBoard(difficulty?: string, useAiSettings?: boolean): Observable<SudokuBoard> {
+    let settings;
+    
+    if (useAiSettings) {
+      // For AI Learning component, check for AI-specific settings
+      settings = this.getAiSettings();
+    } else {
+      // For regular game, use normal settings
+      settings = this.getSettings();
+    }
+    
+    if (settings.useApi) {
+      return this.getApiBoard(difficulty, useAiSettings);
+    } else {
+      const localDifficulty = useAiSettings ? settings.aiDifficulty : settings.localDifficulty;
+      return this.getLocalBoard(localDifficulty as 'easy' | 'medium' | 'hard' | 'expert');
+    }
+  }
+
+  // Get board from API
+  private getApiBoard(difficulty?: string, useAiSettings?: boolean): Observable<SudokuBoard> {
     // GraphQL query to get a complete board with value, solution, and difficulty
     const query = '{newboard(limit:1){grids{value,solution,difficulty},results,message}}';
     
@@ -53,11 +77,31 @@ export class SudokuService {
           };
         }),
         catchError(error => {
-          console.error('Error fetching Sudoku board:', error);
-          // Return a fallback board if API fails
-          return of(this.getFallbackBoard());
+          console.error('Error fetching Sudoku board from API:', error);
+          console.log('Falling back to local generation...');
+          // Fallback to local generation if API fails
+          const settings = useAiSettings ? this.getAiSettings() : this.getSettings();
+          const fallbackDifficulty = useAiSettings ? settings.aiDifficulty : settings.localDifficulty;
+          return this.getLocalBoard(fallbackDifficulty as 'easy' | 'medium' | 'hard' | 'expert');
         })
       );
+  }
+
+  // Get board from local generator
+  private getLocalBoard(difficulty: 'easy' | 'medium' | 'hard' | 'expert'): Observable<SudokuBoard> {
+    try {
+      const localBoard = this.localGenerator.generateBoard(difficulty);
+      
+      return of({
+        grid: localBoard.grid,
+        solution: localBoard.solution,
+        difficulty: localBoard.difficulty
+      });
+    } catch (error) {
+      console.error('Error generating local Sudoku board:', error);
+      // Return fallback board if local generation fails
+      return of(this.getFallbackBoard());
+    }
   }
 
   // Fallback board in case API fails
@@ -87,6 +131,68 @@ export class SudokuService {
       ],
       difficulty: 'Medium'
     };
+  }
+
+  // Get AI Learning specific settings
+  private getAiSettings(): any {
+    const savedSettings = localStorage.getItem('sudokuAiSettings');
+    if (savedSettings) {
+      return JSON.parse(savedSettings);
+    }
+    
+    // Default AI settings if none saved
+    return {
+      useApi: true,
+      aiDifficulty: 'medium'
+    };
+  }
+
+  // Get user settings from localStorage
+  private getSettings(): any {
+    const savedSettings = localStorage.getItem('sudokuSettings');
+    if (savedSettings) {
+      return JSON.parse(savedSettings);
+    }
+    
+    // Default settings if none saved
+    return {
+      useApi: true,
+      localDifficulty: 'medium',
+      showMistakes: true,
+      showTimer: true,
+      highlightSameNumbers: true,
+      theme: 'light'
+    };
+  }
+
+  // Save AI Learning specific settings
+  saveAiSettings(settings: any): void {
+    localStorage.setItem('sudokuAiSettings', JSON.stringify(settings));
+  }
+
+  // Get board for AI Learning specifically
+  getAiBoard(): Observable<SudokuBoard> {
+    return this.getNewBoard(undefined, true);
+  }
+
+  // Force API usage (for testing or specific needs)
+  forceApiBoard(difficulty?: string): Observable<SudokuBoard> {
+    return this.getApiBoard(difficulty, false);
+  }
+
+  // Force local generation (for testing or specific needs)
+  forceLocalBoard(difficulty: 'easy' | 'medium' | 'hard' | 'expert' = 'medium'): Observable<SudokuBoard> {
+    return this.getLocalBoard(difficulty);
+  }
+
+  // Get current settings
+  getCurrentSettings(): any {
+    return this.getSettings();
+  }
+
+  // Get current AI settings
+  getCurrentAiSettings(): any {
+    return this.getAiSettings();
   }
 
   // Helper method to check if a move is valid
