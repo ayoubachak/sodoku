@@ -305,6 +305,7 @@ export class AiLearningComponent implements OnInit, OnDestroy {
     });
   }
 
+  // Initialize cell data structure for the UI
   private initializeCellData(): void {
     this.cellData = [];
     for (let row = 0; row < 9; row++) {
@@ -320,6 +321,43 @@ export class AiLearningComponent implements OnInit, OnDestroy {
           isSameNumber: false,
           isHighlighted: false
         };
+      }
+    }
+  }
+
+  // New method: Only refresh the board without affecting training state or loading indicators
+  private async refreshBoardOnly(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.sudokuService.getNewBoard().subscribe({
+        next: (boardData) => {
+          try {
+            // Only update board data, don't touch loading state or training indicators
+            this.board = JSON.parse(JSON.stringify(boardData.grid));
+            this.solution = JSON.parse(JSON.stringify(boardData.solution));
+            this.currentTrainingBoard = JSON.parse(JSON.stringify(boardData.grid));
+            this.updateCellDataFromBoard();
+            resolve();
+          } catch (error) {
+            console.error('Error processing board data:', error);
+            reject(error instanceof Error ? error : new Error('Failed to process board data'));
+          }
+        },
+        error: (error) => {
+          console.error('Error loading board:', error);
+          reject(error instanceof Error ? error : new Error('Failed to load board'));
+        }
+      });
+    });
+  }
+
+  // New method: Update cell data from current board state without full reinitialization
+  private updateCellDataFromBoard(): void {
+    for (let row = 0; row < 9; row++) {
+      for (let col = 0; col < 9; col++) {
+        // Only update the board values and original cell flags, preserve other UI state
+        this.cellData[row][col].value = this.board[row][col];
+        this.cellData[row][col].isOriginal = this.board[row][col] !== 0;
+        // Keep existing highlighting and selection states during training
       }
     }
   }
@@ -532,7 +570,7 @@ export class AiLearningComponent implements OnInit, OnDestroy {
         // Reset board for next episode (always generate a new puzzle)
         if (this.isTraining && this.episodes < maxEpisodes) {
           try {
-            await this.initializeBoard();
+            await this.refreshBoardOnly(); // Use refreshBoardOnly instead of initializeBoard
             await new Promise(resolve => setTimeout(resolve, 100));
           } catch (error) {
             console.error('Error initializing new board for next episode:', error);
@@ -662,7 +700,7 @@ export class AiLearningComponent implements OnInit, OnDestroy {
         
         // Reset board for next episode
         if (this.isTraining) {
-          await this.initializeBoard();
+          await this.refreshBoardOnly(); // Use refreshBoardOnly instead of initializeBoard
           await new Promise(resolve => setTimeout(resolve, 100));
         }
         
@@ -864,7 +902,7 @@ export class AiLearningComponent implements OnInit, OnDestroy {
       };
 
       // Initialize or update accuracy chart series
-      if (!this.accuracyChartData[0] || !this.accuracyChartData[0].series) {
+      if (!this.accuracyChartData[0]?.series) {
         this.accuracyChartData = [{
           name: this.selectedAlgorithm.toUpperCase() + ' Accuracy',
           series: []
@@ -872,7 +910,7 @@ export class AiLearningComponent implements OnInit, OnDestroy {
       }
 
       // Initialize or update reward chart series  
-      if (!this.rewardChartData[0] || !this.rewardChartData[0].series) {
+      if (!this.rewardChartData[0]?.series) {
         this.rewardChartData = [{
           name: this.selectedAlgorithm.toUpperCase() + ' Reward',
           series: []
@@ -893,7 +931,7 @@ export class AiLearningComponent implements OnInit, OnDestroy {
 
       // Update loss chart for PPO
       if (this.selectedAlgorithm === 'ppo') {
-        if (!this.lossChartData[0] || !this.lossChartData[0].series) {
+        if (!this.lossChartData[0]?.series) {
           this.lossChartData = [{
             name: 'Actor Loss',
             series: []
@@ -922,7 +960,7 @@ export class AiLearningComponent implements OnInit, OnDestroy {
 
       // Update DQN-specific charts
       if (this.selectedAlgorithm === 'dqn') {
-        if (!this.lossChartData[0] || !this.lossChartData[0].series) {
+        if (!this.lossChartData[0]?.series) {
           this.lossChartData = [{
             name: 'Q-Value',
             series: []

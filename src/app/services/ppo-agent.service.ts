@@ -416,10 +416,9 @@ export class PPOAgentService {
         const valuePreds = tf.squeeze(valueOutput);
 
         // === POLICY LOSS (PPO Clipped Surrogate) ===
-        const batchSize = statesTensor.shape[0];
-        const batchIndices = tf.range(0, batchSize, 1, 'int32');
-        const indices = tf.stack([batchIndices, actionIndices], 1);
-        const actionProbs = tf.gatherND(policyOutput, indices);
+        // Use one-hot encoding instead of gatherND for gradient support
+        const actionOneHot = tf.oneHot(actionIndices, 729);
+        const actionProbs = tf.sum(tf.mul(policyOutput, actionOneHot), 1);
         
         const actionProbsFloat32 = tf.cast(actionProbs, 'float32');
         const newLogProbs = tf.log(tf.add(actionProbsFloat32, tf.scalar(1e-8)));
@@ -512,11 +511,9 @@ export class PPOAgentService {
       const valueOutput = this.critic!.predict(statesTensor) as tf.Tensor;
       const valuePreds = tf.squeeze(valueOutput);
 
-      // Policy loss calculation
-      const batchSize = statesTensor.shape[0];
-      const batchIndices = tf.range(0, batchSize, 1, 'int32');
-      const indices = tf.stack([batchIndices, actionIndices], 1);
-      const actionProbs = tf.gatherND(policyOutput, indices);
+      // Policy loss calculation - use one-hot encoding instead of gatherND
+      const actionOneHot = tf.oneHot(actionIndices, 729);
+      const actionProbs = tf.sum(tf.mul(policyOutput, actionOneHot), 1);
       const actionProbsFloat32 = tf.cast(actionProbs, 'float32');
       const newLogProbs = tf.log(tf.add(actionProbsFloat32, tf.scalar(1e-8)));
       
