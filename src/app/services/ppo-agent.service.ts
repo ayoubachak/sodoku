@@ -142,7 +142,7 @@ export class PPOAgentService {
     return true;
   }
 
-  // Select action using policy
+  // Enhanced action selection with exploration bonus for early training
   async selectAction(board: number[][]): Promise<{ action: number; logProb: number; value: number }> {
     if (!this.actor || !this.critic) {
       throw new Error('PPO Agent not initialized');
@@ -172,7 +172,7 @@ export class PPOAgentService {
       sum += policyData[action];
     }
 
-    // Normalize
+    // Enhanced normalization with exploration bonus for early training
     if (sum > 0) {
       for (const action of validActions) {
         maskedPolicy[action] /= sum;
@@ -185,18 +185,37 @@ export class PPOAgentService {
       }
     }
 
-    // Sample action
+    // Add exploration bonus for cells with fewer constraints (easier to fill)
+    const explorationBonuses = this.calculateExplorationBonuses(board, validActions);
+    for (let i = 0; i < validActions.length; i++) {
+      const action = validActions[i];
+      maskedPolicy[action] = maskedPolicy[action] * 0.7 + explorationBonuses[i] * 0.3;
+    }
+
+    // Renormalize after adding exploration bonuses
+    sum = 0;
+    for (const action of validActions) {
+      sum += maskedPolicy[action];
+    }
+    if (sum > 0) {
+      for (const action of validActions) {
+        maskedPolicy[action] /= sum;
+      }
+    }
+
+    // Sample action using accumulated probabilities
     let random = Math.random();
     let selectedAction = validActions[0];
     let logProb = Math.log(maskedPolicy[selectedAction] + 1e-8);
 
+    let accumulated = 0;
     for (const action of validActions) {
-      if (random <= maskedPolicy[action]) {
+      accumulated += maskedPolicy[action];
+      if (random <= accumulated) {
         selectedAction = action;
         logProb = Math.log(maskedPolicy[action] + 1e-8);
         break;
       }
-      random -= maskedPolicy[action];
     }
 
     // Cleanup tensors
@@ -211,7 +230,46 @@ export class PPOAgentService {
     };
   }
 
-  // Apply action to board
+  // Calculate exploration bonuses to encourage filling cells with fewer constraints
+  private calculateExplorationBonuses(board: number[][], validActions: number[]): number[] {
+    const bonuses: number[] = [];
+    
+    for (const action of validActions) {
+      const row = Math.floor(action / 81);
+      const col = Math.floor((action % 81) / 9);
+      const value = (action % 9) + 1;
+      
+      // Count how many other cells this move would affect (constraint cells)
+      let constraintCells = 0;
+      
+      // Count empty cells in same row
+      for (let c = 0; c < 9; c++) {
+        if (c !== col && board[row][c] === 0) constraintCells++;
+      }
+      
+      // Count empty cells in same column  
+      for (let r = 0; r < 9; r++) {
+        if (r !== row && board[r][col] === 0) constraintCells++;
+      }
+      
+      // Count empty cells in same 3x3 box
+      const boxRow = Math.floor(row / 3) * 3;
+      const boxCol = Math.floor(col / 3) * 3;
+      for (let r = boxRow; r < boxRow + 3; r++) {
+        for (let c = boxCol; c < boxCol + 3; c++) {
+          if ((r !== row || c !== col) && board[r][c] === 0) constraintCells++;
+        }
+      }
+      
+      // Higher bonus for moves that affect more cells (more strategic)
+      const bonus = Math.min(1.0, (constraintCells + 1) / 20.0);
+      bonuses.push(bonus);
+    }
+    
+    return bonuses;
+  }
+
+  // Apply action to board with enhanced reward system
   applyAction(board: number[][], action: number): { newBoard: number[][]; reward: number; done: boolean } {
     const row = Math.floor(action / 81);
     const col = Math.floor((action % 81) / 9);
@@ -220,59 +278,145 @@ export class PPOAgentService {
     const newBoard = board.map(row => [...row]);
     newBoard[row][col] = value;
 
-    // Calculate reward
+    // Enhanced reward calculation
     let reward = 0;
     
-    // Positive reward for valid placement
-    reward += 1.0;
+    // Base reward for valid placement
+    reward += 2.0;
     
-    // Bonus for solving cells that eliminate possibilities for other cells
+    // Strategic placement bonuses
+    const beforeValidMoves = this.getValidActions(board).length;
+    const afterValidMoves = this.getValidActions(newBoard).length;
+    
+    // Bonus for maintaining or creating more possibilities
+    if (afterValidMoves > beforeValidMoves) {
+      reward += 1.0; // Opened up new possibilities
+    } else if (afterValidMoves === beforeValidMoves) {
+      reward += 0.5; // Maintained same level of possibilities
+    }
+    
+    // Bonus for solving cells that eliminate possibilities strategically
     const eliminatedPossibilities = this.countEliminatedPossibilities(board, newBoard, row, col, value);
-    reward += eliminatedPossibilities * 0.1;
+    reward += eliminatedPossibilities * 0.2;
+    
+    // Bonus for filling cells with fewer initial candidates (harder cells)
+    const initialCandidates = this.countInitialCandidates(board, row, col);
+    if (initialCandidates <= 2) {
+      reward += 3.0; // High bonus for solving difficult cells
+    } else if (initialCandidates <= 4) {
+      reward += 1.5; // Medium bonus
+    } else {
+      reward += 0.5; // Small bonus for easy cells
+    }
+    
+    // Bonus for completing regions (rows, columns, boxes)
+    reward += this.calculateCompletionBonuses(newBoard, row, col);
     
     // Check if puzzle is solved
     const done = this.isPuzzleSolved(newBoard);
     if (done) {
-      reward += 10.0; // Large bonus for solving
+      reward += 50.0; // Large bonus for solving the entire puzzle
     }
 
-    // Small penalty for each step to encourage efficiency
-    reward -= 0.01;
+    // Small step penalty to encourage efficiency (reduced from before)
+    reward -= 0.005;
 
     return { newBoard, reward, done };
   }
 
-  // Count how many possibilities are eliminated by placing a value
-  private countEliminatedPossibilities(oldBoard: number[][], newBoard: number[][], row: number, col: number, value: number): number {
-    let count = 0;
+  // Count initial candidates for a cell
+  private countInitialCandidates(board: number[][], row: number, col: number): number {
+    let candidates = 0;
+    for (let value = 1; value <= 9; value++) {
+      if (this.isValidMove(board, row, col, value)) {
+        candidates++;
+      }
+    }
+    return candidates;
+  }
+
+  // Calculate bonuses for completing rows, columns, or boxes
+  private calculateCompletionBonuses(board: number[][], row: number, col: number): number {
+    let bonus = 0;
     
-    // Check row
+    // Check if row is complete
+    let rowComplete = true;
     for (let c = 0; c < 9; c++) {
-      if (c !== col && oldBoard[row][c] === 0) count++;
+      if (board[row][c] === 0) {
+        rowComplete = false;
+        break;
+      }
     }
+    if (rowComplete) bonus += 5.0;
     
-    // Check column
+    // Check if column is complete
+    let colComplete = true;
     for (let r = 0; r < 9; r++) {
-      if (r !== row && oldBoard[r][col] === 0) count++;
+      if (board[r][col] === 0) {
+        colComplete = false;
+        break;
+      }
     }
+    if (colComplete) bonus += 5.0;
     
-    // Check 3x3 box
+    // Check if 3x3 box is complete
     const boxRow = Math.floor(row / 3) * 3;
     const boxCol = Math.floor(col / 3) * 3;
+    let boxComplete = true;
     for (let r = boxRow; r < boxRow + 3; r++) {
       for (let c = boxCol; c < boxCol + 3; c++) {
-        if ((r !== row || c !== col) && oldBoard[r][c] === 0) count++;
+        if (board[r][c] === 0) {
+          boxComplete = false;
+          break;
+        }
+      }
+      if (!boxComplete) break;
+    }
+    if (boxComplete) bonus += 5.0;
+    
+    return bonus;
+  }
+
+  // Count how many possibilities are eliminated by placing a value
+  private countEliminatedPossibilities(oldBoard: number[][], newBoard: number[][], row: number, col: number, value: number): number {
+    let eliminated = 0;
+    
+    // Count eliminations in row
+    for (let c = 0; c < 9; c++) {
+      if (c !== col && oldBoard[row][c] === 0) {
+        eliminated++;
       }
     }
     
-    return count;
+    // Count eliminations in column
+    for (let r = 0; r < 9; r++) {
+      if (r !== row && oldBoard[r][col] === 0) {
+        eliminated++;
+      }
+    }
+    
+    // Count eliminations in 3x3 box
+    const boxRow = Math.floor(row / 3) * 3;
+    const boxCol = Math.floor(col / 3) * 3;
+    
+    for (let r = boxRow; r < boxRow + 3; r++) {
+      for (let c = boxCol; c < boxCol + 3; c++) {
+        if ((r !== row || c !== col) && oldBoard[r][c] === 0) {
+          eliminated++;
+        }
+      }
+    }
+    
+    return eliminated;
   }
 
   // Check if puzzle is solved
   private isPuzzleSolved(board: number[][]): boolean {
     for (let i = 0; i < 9; i++) {
       for (let j = 0; j < 9; j++) {
-        if (board[i][j] === 0) return false;
+        if (board[i][j] === 0) {
+          return false;
+        }
       }
     }
     return true;
