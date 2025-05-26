@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -169,7 +169,8 @@ export class AiLearningComponent implements OnInit, OnDestroy {
     private readonly sudokuService: SudokuService,
     private readonly snackBar: MatSnackBar,
     private readonly ppoAgent: PPOAgentService,
-    private readonly dqnAgent: DQNAgentService
+    private readonly dqnAgent: DQNAgentService,
+    private readonly cdr: ChangeDetectorRef
   ) {
     // Pre-generate random values for thinking visualization
     this.generateRandomThinkingValues();
@@ -571,6 +572,9 @@ export class AiLearningComponent implements OnInit, OnDestroy {
           this.updateCharts();
         }
         
+        // Force change detection for real-time updates
+        this.cdr.detectChanges();
+        
         // Reset board for next episode (always generate a new puzzle)
         if (this.isTraining && this.episodes < maxEpisodes) {
           try {
@@ -701,6 +705,9 @@ export class AiLearningComponent implements OnInit, OnDestroy {
         if (this.episodes % 5 === 0) {
           this.updateCharts();
         }
+        
+        // Force change detection for real-time updates
+        this.cdr.detectChanges();
         
         // Reset board for next episode
         if (this.isTraining) {
@@ -871,7 +878,7 @@ export class AiLearningComponent implements OnInit, OnDestroy {
     // console.log(`Validation found for ${row},${col}: isCorrect=${validation.isCorrect}, timeElapsed=${timeElapsed}ms, displayTime=${this.VALIDATION_DISPLAY_TIME}ms`); // Enhanced debug log
     
     if (timeElapsed > this.VALIDATION_DISPLAY_TIME) {
-      // console.log(`Validation expired for ${row},${col}, removing`); // Debug log
+      console.log(`Validation expired for ${row},${col}, removing`); // Debug log
       this.decisionValidation.delete(cellKey);
       return '';
     }
