@@ -32,8 +32,7 @@ export interface TrainingStep {
 export class PPOAgentService {
   private actor: tf.LayersModel | null = null;
   private critic: tf.LayersModel | null = null;
-  private actorOptimizer: tf.Optimizer | null = null;
-  private criticOptimizer: tf.Optimizer | null = null;
+  private optimizer: tf.Optimizer | null = null; // Single optimizer for combined training
   private config: PPOConfig;
   private trainingBuffer: TrainingStep[] = [];
   private totalSteps = 0;
@@ -57,9 +56,8 @@ export class PPOAgentService {
       this.config = { ...this.config, ...config };
     }
 
-    // Initialize optimizers
-    this.actorOptimizer = tf.train.adam(this.config.learningRate);
-    this.criticOptimizer = tf.train.adam(this.config.learningRate);
+    // Initialize single optimizer for combined training
+    this.optimizer = tf.train.adam(this.config.learningRate);
 
     // Initialize actor network (policy)
     this.actor = tf.sequential({
@@ -310,9 +308,9 @@ export class PPOAgentService {
     return { advantages, returns };
   }
 
-  // Train the agent
+  // Train the agent with combined PPO loss
   async train(): Promise<{ actorLoss: number; criticLoss: number; avgAdvantage: number }> {
-    if (!this.actor || !this.critic) {
+    if (!this.actor || !this.critic || !this.optimizer) {
       throw new Error('PPO Agent not initialized');
     }
 
@@ -336,9 +334,11 @@ export class PPOAgentService {
     const states = steps.map(step => step.state);
     const actions = steps.map(step => step.action);
     const oldLogProbs = steps.map(step => step.logProb);
+    const oldValues = steps.map(step => step.value);
 
-    let totalActorLoss = 0;
-    let totalCriticLoss = 0;
+    let totalPolicyLoss = 0;
+    let totalValueLoss = 0;
+    let batchCount = 0;
 
     // Train for multiple epochs
     for (let epoch = 0; epoch < this.config.epochs; epoch++) {
@@ -359,136 +359,192 @@ export class PPOAgentService {
         const batchAdvantages = batchIndices.map(idx => normalizedAdvantages[idx]);
         const batchReturns = batchIndices.map(idx => returns[idx]);
         const batchOldLogProbs = batchIndices.map(idx => oldLogProbs[idx]);
+        const batchOldValues = batchIndices.map(idx => oldValues[idx]);
 
-        // Train critic
-        const criticLoss = await this.trainCritic(batchStates, batchReturns);
-        totalCriticLoss += criticLoss;
-
-        // Train actor
-        const actorLoss = await this.trainActor(batchStates, batchActions, batchAdvantages, batchOldLogProbs);
-        totalActorLoss += actorLoss;
+        // Train with combined PPO loss
+        const losses = await this.trainCombined(
+          batchStates, 
+          batchActions, 
+          batchAdvantages, 
+          batchReturns, 
+          batchOldLogProbs,
+          batchOldValues
+        );
+        
+        totalPolicyLoss += losses.policyLoss;
+        totalValueLoss += losses.valueLoss;
+        batchCount++;
       }
     }
 
     this.isTraining = false;
 
-    const numBatches = Math.ceil(states.length / this.config.batchSize) * this.config.epochs;
     return {
-      actorLoss: totalActorLoss / numBatches,
-      criticLoss: totalCriticLoss / numBatches,
+      actorLoss: totalPolicyLoss / batchCount,
+      criticLoss: totalValueLoss / batchCount,
       avgAdvantage: advMean
     };
   }
 
-  // Train critic network
-  private async trainCritic(states: number[][], returns: number[]): Promise<number> {
-    if (!this.critic || !this.criticOptimizer) {
-      throw new Error('Critic not initialized');
+  // Combined PPO training with proper loss function
+  private async trainCombined(
+    states: number[][], 
+    actions: number[], 
+    advantages: number[], 
+    returns: number[], 
+    oldLogProbs: number[],
+    oldValues: number[]
+  ): Promise<{ policyLoss: number; valueLoss: number }> {
+    if (!this.actor || !this.critic || !this.optimizer) {
+      throw new Error('Models not initialized');
     }
 
     return tf.tidy(() => {
-      // Ensure consistent float32 dtype
-      const statesTensor = tf.tensor2d(states, undefined, 'float32');
-      const returnsTensor = tf.tensor2d(returns, [returns.length, 1], 'float32');
-
-      // Use tf.variableGrads to compute gradients and apply them
-      const f = (): tf.Scalar => {
-        const predictions = this.critic!.predict(statesTensor) as tf.Tensor;
-        const loss = tf.losses.meanSquaredError(returnsTensor, predictions);
-        // Return scalar without unnecessary casting
-        return tf.mean(loss);
-      };
-
-      const { value: loss, grads } = tf.variableGrads(f);
-      
-      // Apply gradients to critic
-      this.criticOptimizer!.applyGradients(grads);
-      
-      const lossValue = loss.dataSync()[0];
-      
-      // Cleanup
-      statesTensor.dispose();
-      returnsTensor.dispose();
-      loss.dispose();
-      Object.values(grads).forEach(grad => grad.dispose());
-
-      return lossValue;
-    });
-  }
-
-  // Train actor network with proper gradient application
-  private async trainActor(states: number[][], actions: number[], advantages: number[], oldLogProbs: number[]): Promise<number> {
-    if (!this.actor || !this.actorOptimizer) {
-      throw new Error('Actor not initialized');
-    }
-
-    return tf.tidy(() => {
-      // Ensure all tensors use float32 dtype
+      // Convert to tensors with consistent float32 dtype
       const statesTensor = tf.tensor2d(states, undefined, 'float32');
       const actionIndices = tf.tensor1d(actions, 'int32');
       const advantagesTensor = tf.tensor1d(advantages, 'float32');
+      const returnsTensor = tf.tensor1d(returns, 'float32');
       const oldLogProbsTensor = tf.tensor1d(oldLogProbs, 'float32');
+      const oldValuesTensor = tf.tensor1d(oldValues, 'float32');
 
-      // Use tf.variableGrads to compute gradients and apply them
+      // Combined loss function using tf.variableGrads
       const f = (): tf.Scalar => {
-        // Forward pass to get current policy
+        // Forward pass through both networks
         const policyOutput = this.actor!.predict(statesTensor) as tf.Tensor;
-        
-        // Calculate new log probabilities for taken actions
+        const valueOutput = this.critic!.predict(statesTensor) as tf.Tensor;
+        const valuePreds = tf.squeeze(valueOutput);
+
+        // === POLICY LOSS (PPO Clipped Surrogate) ===
         const batchSize = statesTensor.shape[0];
         const batchIndices = tf.range(0, batchSize, 1, 'int32');
-        
-        // Create indices tensor with correct dtype for stack operation
         const indices = tf.stack([batchIndices, actionIndices], 1);
         const actionProbs = tf.gatherND(policyOutput, indices);
         
-        // Ensure actionProbs is float32 before log operation
         const actionProbsFloat32 = tf.cast(actionProbs, 'float32');
         const newLogProbs = tf.log(tf.add(actionProbsFloat32, tf.scalar(1e-8)));
         
-        // Calculate ratio (new_prob / old_prob) - ensure both tensors are float32
+        // Calculate ratio and clipped ratio
         const ratio = tf.exp(tf.sub(newLogProbs, oldLogProbsTensor));
-        
-        // Calculate PPO clipped surrogate loss - use direct numbers for clipping
-        const oneMinusEpsilon = 1 - this.config.clipEpsilon;
-        const onePlusEpsilon = 1 + this.config.clipEpsilon;
-        const clippedRatio = tf.clipByValue(ratio, oneMinusEpsilon, onePlusEpsilon);
+        const clippedRatio = tf.clipByValue(
+          ratio, 
+          1 - this.config.clipEpsilon, 
+          1 + this.config.clipEpsilon
+        );
         
         const surr1 = tf.mul(ratio, advantagesTensor);
         const surr2 = tf.mul(clippedRatio, advantagesTensor);
         const policyLoss = tf.neg(tf.mean(tf.minimum(surr1, surr2)));
+
+        // === VALUE LOSS (PPO Clipped Value) ===
+        // Clip the value function similar to policy clipping
+        const valueClipped = tf.add(
+          oldValuesTensor,
+          tf.clipByValue(
+            tf.sub(valuePreds, oldValuesTensor),
+            -this.config.clipEpsilon,
+            this.config.clipEpsilon
+          )
+        );
         
-        // Calculate entropy bonus - ensure float32 throughout
+        const valueLossUnclipped = tf.square(tf.sub(valuePreds, returnsTensor));
+        const valueLossClipped = tf.square(tf.sub(valueClipped, returnsTensor));
+        const valueLoss = tf.mean(tf.maximum(valueLossUnclipped, valueLossClipped));
+
+        // === ENTROPY BONUS ===
         const epsilon = tf.scalar(1e-8);
         const policyOutputFloat32 = tf.cast(policyOutput, 'float32');
         const logPolicy = tf.log(tf.add(policyOutputFloat32, epsilon));
         const entropy = tf.neg(tf.sum(tf.mul(policyOutputFloat32, logPolicy), 1));
-        const entropyCoef = tf.scalar(this.config.entropyCoef);
-        const entropyBonus = tf.mul(entropyCoef, tf.mean(entropy));
-        
-        // Total loss = policy loss - entropy bonus
-        const totalLoss = tf.sub(policyLoss, entropyBonus);
-        
-        // Return scalar without unnecessary casting
-        return tf.mean(totalLoss);
+        const entropyBonus = tf.mean(entropy);
+
+        // === COMBINED PPO LOSS ===
+        // totalLoss = policyLoss + valueCoef * valueLoss - entropyCoef * entropyBonus
+        const weightedValueLoss = tf.mul(tf.scalar(this.config.valueCoef), valueLoss);
+        const weightedEntropy = tf.mul(tf.scalar(this.config.entropyCoef), entropyBonus);
+        const totalLoss = tf.add(tf.sub(policyLoss, weightedEntropy), weightedValueLoss);
+
+        return totalLoss as tf.Scalar;
       };
 
-      const { value: loss, grads } = tf.variableGrads(f);
+      // Compute gradients and apply to both networks simultaneously
+      const { value: totalLoss, grads } = tf.variableGrads(f);
       
-      // Apply gradients to actor network
-      this.actorOptimizer!.applyGradients(grads);
-      
-      const lossValue = loss.dataSync()[0];
+      // Apply gradients to both actor and critic using single optimizer
+      this.optimizer!.applyGradients(grads);
+
+      // Calculate individual loss components for monitoring
+      const { policyLoss, valueLoss } = this.calculateLossComponents(
+        statesTensor, actionIndices, advantagesTensor, returnsTensor, 
+        oldLogProbsTensor, oldValuesTensor
+      );
+
+      const totalLossValue = totalLoss.dataSync()[0];
       
       // Cleanup tensors
       statesTensor.dispose();
       actionIndices.dispose();
       advantagesTensor.dispose();
+      returnsTensor.dispose();
       oldLogProbsTensor.dispose();
-      loss.dispose();
+      oldValuesTensor.dispose();
+      totalLoss.dispose();
       Object.values(grads).forEach(grad => grad.dispose());
 
-      return lossValue;
+      return { 
+        policyLoss: policyLoss, 
+        valueLoss: valueLoss 
+      };
+    });
+  }
+
+  // Helper to calculate individual loss components for monitoring
+  private calculateLossComponents(
+    statesTensor: tf.Tensor, 
+    actionIndices: tf.Tensor, 
+    advantagesTensor: tf.Tensor, 
+    returnsTensor: tf.Tensor,
+    oldLogProbsTensor: tf.Tensor,
+    oldValuesTensor: tf.Tensor
+  ): { policyLoss: number; valueLoss: number } {
+    return tf.tidy(() => {
+      const policyOutput = this.actor!.predict(statesTensor) as tf.Tensor;
+      const valueOutput = this.critic!.predict(statesTensor) as tf.Tensor;
+      const valuePreds = tf.squeeze(valueOutput);
+
+      // Policy loss calculation
+      const batchSize = statesTensor.shape[0];
+      const batchIndices = tf.range(0, batchSize, 1, 'int32');
+      const indices = tf.stack([batchIndices, actionIndices], 1);
+      const actionProbs = tf.gatherND(policyOutput, indices);
+      const actionProbsFloat32 = tf.cast(actionProbs, 'float32');
+      const newLogProbs = tf.log(tf.add(actionProbsFloat32, tf.scalar(1e-8)));
+      
+      const ratio = tf.exp(tf.sub(newLogProbs, oldLogProbsTensor));
+      const clippedRatio = tf.clipByValue(ratio, 1 - this.config.clipEpsilon, 1 + this.config.clipEpsilon);
+      
+      const surr1 = tf.mul(ratio, advantagesTensor);
+      const surr2 = tf.mul(clippedRatio, advantagesTensor);
+      const policyLoss = tf.neg(tf.mean(tf.minimum(surr1, surr2)));
+
+      // Value loss calculation with clipping
+      const valueClipped = tf.add(
+        oldValuesTensor,
+        tf.clipByValue(
+          tf.sub(valuePreds, oldValuesTensor),
+          -this.config.clipEpsilon,
+          this.config.clipEpsilon
+        )
+      );
+      
+      const valueLossUnclipped = tf.square(tf.sub(valuePreds, returnsTensor));
+      const valueLossClipped = tf.square(tf.sub(valueClipped, returnsTensor));
+      const valueLoss = tf.mean(tf.maximum(valueLossUnclipped, valueLossClipped));
+
+      return {
+        policyLoss: policyLoss.dataSync()[0],
+        valueLoss: valueLoss.dataSync()[0]
+      };
     });
   }
 
@@ -549,21 +605,17 @@ export class PPOAgentService {
     criticTensors.forEach((t: tf.Tensor) => t.dispose());
   }
 
-  // Update configuration and reinitialize optimizers if learning rate changed
+  // Update configuration and reinitialize optimizer if learning rate changed
   updateConfig(newConfig: Partial<PPOConfig>): void {
     const oldLearningRate = this.config.learningRate;
     this.config = { ...this.config, ...newConfig };
     
-    // Reinitialize optimizers if learning rate changed
+    // Reinitialize optimizer if learning rate changed
     if (newConfig.learningRate && newConfig.learningRate !== oldLearningRate) {
-      if (this.actorOptimizer) {
-        this.actorOptimizer.dispose();
+      if (this.optimizer) {
+        this.optimizer.dispose();
       }
-      if (this.criticOptimizer) {
-        this.criticOptimizer.dispose();
-      }
-      this.actorOptimizer = tf.train.adam(this.config.learningRate);
-      this.criticOptimizer = tf.train.adam(this.config.learningRate);
+      this.optimizer = tf.train.adam(this.config.learningRate);
     }
   }
 
@@ -572,7 +624,7 @@ export class PPOAgentService {
     return { ...this.config };
   }
 
-  // Dispose of models and optimizers
+  // Dispose of models and optimizer
   dispose(): void {
     if (this.actor) {
       this.actor.dispose();
@@ -582,13 +634,9 @@ export class PPOAgentService {
       this.critic.dispose();
       this.critic = null;
     }
-    if (this.actorOptimizer) {
-      this.actorOptimizer.dispose();
-      this.actorOptimizer = null;
-    }
-    if (this.criticOptimizer) {
-      this.criticOptimizer.dispose();
-      this.criticOptimizer = null;
+    if (this.optimizer) {
+      this.optimizer.dispose();
+      this.optimizer = null;
     }
   }
 
